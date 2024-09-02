@@ -62,7 +62,6 @@ fn main() -> Result<()> {
                     code: [
                         "-i", &interface, "-p", "tcp", "--dport", "9080", "-j", "RETURN",
                     ]
-                    .as_ref()
                     .into(),
                 },
             );
@@ -71,7 +70,7 @@ fn main() -> Result<()> {
                 Action::Append,
                 Rule {
                     chain: our_chain.clone().into(),
-                    code: ["-i", &interface, "-j", "REJECT"].as_ref().into(),
+                    code: ["-i", &interface, "-j", "REJECT"].into(),
                 },
             );
         }

@@ -270,6 +270,12 @@ impl From<&[&str]> for Code {
     }
 }
 
+impl<const N: usize> From<[&str; N]> for Code {
+    fn from(value: [&str; N]) -> Self {
+        value.as_ref().into()
+    }
+}
+
 impl Code {
     pub fn args(&self) -> &[String] {
         &self.0
