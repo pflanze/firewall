@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::fmt::{Debug, Write};
 use std::process::Command;
 
@@ -289,6 +289,7 @@ impl Rule {
 }
 
 pub struct IptablesWriter {
+    iptables_cmd: Vec<String>,
     actions: Vec<(Action, Rule)>,
 }
 
@@ -303,8 +304,9 @@ pub enum Effect {
 }
 
 impl IptablesWriter {
-    pub fn new() -> Self {
+    pub fn new(iptables_cmd: Vec<String>) -> Self {
         Self {
+            iptables_cmd,
             actions: Vec::new(),
         }
     }
@@ -352,7 +354,6 @@ impl IptablesWriter {
     pub fn to_string(&self) -> String {
         let mut out = String::new();
         for (action, rule) in &self.actions {
-            write_str(&mut out, "iptables");
             for arg in rule.cmd_args(*action) {
                 write_str(&mut out, " ");
                 write_str(&mut out, &arg);
@@ -364,10 +365,17 @@ impl IptablesWriter {
 
     /// Execute for real if true is given.
     pub fn execute(&self, verbose: bool, for_real: bool) -> Result<()> {
+        let mut cmd = self.iptables_cmd.clone().into_iter();
+        let command_path = cmd
+            .next()
+            .ok_or_else(|| anyhow!("iptables_cmd value is empty"))?;
+        let command_base_args: Vec<String> = cmd.collect();
         for (action, rule) in &self.actions {
-            let args = rule.cmd_args(*action);
-            let mut command = Command::new("iptables");
-            command.args(&args);
+            let mut args = rule.cmd_args(*action);
+            let mut all_args = command_base_args.clone();
+            all_args.append(&mut args);
+            let mut command = Command::new(command_path.clone());
+            command.args(&all_args);
             if verbose {
                 eprintln!("+ {command:?}");
             }

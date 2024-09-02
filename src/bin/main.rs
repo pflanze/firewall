@@ -18,7 +18,7 @@ fn main() -> Result<()> {
         _ => bail!("invalid action {:?}", args.action),
     };
 
-    let mut writer = IptablesWriter::new();
+    let mut writer = IptablesWriter::new(vec!["ip6tables".into()]);
     let action = Action::A;
     let interfaces = find_network_interfaces()?;
     dbg!(&interfaces);
