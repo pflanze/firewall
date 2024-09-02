@@ -48,6 +48,8 @@ pub enum Action {
     I(u32),
     Check,
     NewChain,
+    DeleteChain,
+    Flush,
 }
 impl Action {
     pub fn push_args(&self, chain_name: String, out: &mut Vec<String>) {
@@ -64,6 +66,8 @@ impl Action {
             }
             Action::Check => normal("-C"),
             Action::NewChain => normal("-N"),
+            Action::DeleteChain => normal("-X"),
+            Action::Flush => normal("-F"),
         }
     }
 }
