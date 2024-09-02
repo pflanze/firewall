@@ -47,6 +47,7 @@ pub enum Action {
     D,
     I(u32),
     Check,
+    NewChain,
 }
 impl Action {
     pub fn push_args(&self, chain_name: String, out: &mut Vec<String>) {
@@ -62,6 +63,7 @@ impl Action {
                 out.push(format!("{n}"));
             }
             Action::Check => normal("-C"),
+            Action::NewChain => normal("-N"),
         }
     }
 }
