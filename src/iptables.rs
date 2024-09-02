@@ -1,32 +1,46 @@
-use std::fmt::{Debug, Write};
-
 use anyhow::Result;
+use std::fmt::{Debug, Write};
+use std::process::Command;
 
 pub fn write_str(out: &mut String, s: &str) {
     out.write_str(s).unwrap(); // can't ever fail, no?
 }
 
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy,
-         // enumn::N, PartialOrd, Ord, 
-         strum::EnumCount, strum::EnumString, strum::IntoStaticStr)]
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    // enumn::N, PartialOrd, Ord,
+    strum::EnumCount,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
 pub enum Table {
-    #[strum(serialize="filter")]
+    #[strum(serialize = "filter")]
     Filter,
-    #[strum(serialize="nat")]
+    #[strum(serialize = "nat")]
     Nat,
-    #[strum(serialize="mangle")]
+    #[strum(serialize = "mangle")]
     Mangle,
-    #[strum(serialize="raw")]
+    #[strum(serialize = "raw")]
     Raw,
-    #[strum(serialize="security")]
+    #[strum(serialize = "security")]
     Security,
 }
 
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy,
-         // enumn::N, PartialOrd, Ord, 
-         strum::EnumCount, strum::EnumString, strum::IntoStaticStr)]
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    Copy,
+    // enumn::N, PartialOrd, Ord,
+    strum::EnumCount,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
 pub enum Action {
     A,
     // The following are only for `iptables`-running mode
@@ -71,9 +85,16 @@ macro_rules! def_chain {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone,
-         // enumn::N, PartialOrd, Ord, 
-         strum::EnumCount, strum::EnumString, strum::IntoStaticStr)]
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    // enumn::N, PartialOrd, Ord,
+    strum::EnumCount,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
 pub enum Filter {
     INPUT,
     FORWARD,
@@ -82,10 +103,16 @@ pub enum Filter {
 }
 def_chain!(Filter);
 
-
-#[derive(Debug, PartialEq, Eq, Clone,
-         // enumn::N, PartialOrd, Ord, 
-         strum::EnumCount, strum::EnumString, strum::IntoStaticStr)]
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    // enumn::N, PartialOrd, Ord,
+    strum::EnumCount,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
 pub enum Nat {
     PREROUTING,
     INPUT,
@@ -95,10 +122,16 @@ pub enum Nat {
 }
 def_chain!(Nat);
 
-
-#[derive(Debug, PartialEq, Eq, Clone,
-         // enumn::N, PartialOrd, Ord, 
-         strum::EnumCount, strum::EnumString, strum::IntoStaticStr)]
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    // enumn::N, PartialOrd, Ord,
+    strum::EnumCount,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
 pub enum Mangle {
     PREROUTING,
     INPUT,
@@ -109,9 +142,16 @@ pub enum Mangle {
 }
 def_chain!(Mangle);
 
-#[derive(Debug, PartialEq, Eq, Clone,
-         // enumn::N, PartialOrd, Ord, 
-         strum::EnumCount, strum::EnumString, strum::IntoStaticStr)]
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    // enumn::N, PartialOrd, Ord,
+    strum::EnumCount,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
 pub enum Raw {
     PREROUTING,
     OUTPUT,
@@ -119,10 +159,16 @@ pub enum Raw {
 }
 def_chain!(Raw);
 
-
-#[derive(Debug, PartialEq, Eq, Clone,
-         // enumn::N, PartialOrd, Ord, 
-         strum::EnumCount, strum::EnumString, strum::IntoStaticStr)]
+#[derive(
+    Debug,
+    PartialEq,
+    Eq,
+    Clone,
+    // enumn::N, PartialOrd, Ord,
+    strum::EnumCount,
+    strum::EnumString,
+    strum::IntoStaticStr,
+)]
 pub enum Security {
     INPUT,
     OUTPUT,
@@ -130,7 +176,6 @@ pub enum Security {
     Custom(String),
 }
 def_chain!(Security);
-
 
 pub enum Chain {
     Filter(Filter),
@@ -201,7 +246,7 @@ pub struct IptablesWriter {
 impl IptablesWriter {
     pub fn new() -> Self {
         Self {
-            actions: Vec::new()
+            actions: Vec::new(),
         }
     }
     pub fn push(&mut self, action: Action, rule: Rule) {
@@ -227,11 +272,13 @@ impl IptablesWriter {
     pub fn execute(&self, verbose: bool, for_real: bool) -> Result<()> {
         for (action, rule) in &self.actions {
             let args = rule.cmd_args(*action);
+            let mut command = Command::new("iptables");
+            command.args(&args);
             if verbose {
-                eprintln!("+ iptables {args:?}");
+                eprintln!("+ {command:?}");
             }
             if for_real {
-                todo!()
+                command.status()?;
             }
         }
         Ok(())

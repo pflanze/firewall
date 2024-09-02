@@ -21,3 +21,4 @@ clap = { version = "=3.2.23", features = ["derive"] }
 enumn = "0.1"
 strum = { version = "0.20", features = ["derive"] }
 strum_macros = { version = "0.20" }
+nispor = "1.2.19"
