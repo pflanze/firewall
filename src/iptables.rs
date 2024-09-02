@@ -1,5 +1,6 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use std::fmt::{Debug, Write};
+use std::os::unix::process::ExitStatusExt;
 use std::process::Command;
 
 pub fn write_str(out: &mut String, s: &str) {
@@ -89,16 +90,20 @@ impl Action {
     /// The sequence of actions that are *removing* the original
     /// action. `None` if the action is not one that creates
     /// something.
-    pub fn deletion_sequence(&self) -> Option<Vec<Action>> {
+    pub fn deletion_sequence(&self) -> Option<&[Action]> {
         match self {
-            Action::Append => Some(vec![Action::Delete]),
+            Action::Append => Some(&[Action::Delete]),
             Action::Delete => None,
-            Action::Insert(_) => Some(vec![Action::Delete]),
+            Action::Insert(_) => Some(&[Action::Delete]),
             Action::Check => None,
-            Action::NewChain => Some(vec![Action::Flush, Action::DeleteChain]),
+            Action::NewChain => Some(&[Action::Flush, Action::DeleteChain]),
             Action::DeleteChain => None,
             Action::Flush => None,
         }
+    }
+
+    pub fn is_creation(&self) -> bool {
+        self.deletion_sequence().is_some()
     }
 }
 
@@ -324,10 +329,10 @@ impl IptablesWriter {
     /// creative action, warns and runs just `action` when creating or
     /// nothing if Effect::Delete is wanted.
     pub fn push_wanting(&mut self, want: Effect, action: Action, rule: Rule) {
-        let mut run = |maybe_seq, run_orig_as_fallback| {
+        let mut run = |maybe_seq: Option<&[Action]>, run_orig_as_fallback| {
             if let Some(seq) = maybe_seq {
                 for action in seq {
-                    self.actions.push((action, rule.clone()));
+                    self.actions.push((*action, rule.clone()));
                 }
             } else {
                 eprintln!(
@@ -341,10 +346,10 @@ impl IptablesWriter {
         };
         match want {
             Effect::Creation => run(
-                Some(vec![action]),
+                Some(&vec![action]),
                 false, // branch never taken anyway
             ),
-            Effect::Recreation => run(action.recreation_sequence(), true),
+            Effect::Recreation => run(action.recreation_sequence().as_deref(), true),
             Effect::Deletion => run(action.deletion_sequence(), false),
         }
     }
@@ -380,7 +385,29 @@ impl IptablesWriter {
                 eprintln!("+ {command:?}");
             }
             if for_real {
-                command.status()?;
+                let status = command.status()?;
+                if !status.success() {
+                    match status.code() {
+                        Some(1) => {
+                            if !action.is_creation() {
+                                // XX is it correct to assume that the
+                                // commands exits with code 1 for match
+                                // failures?
+                                ()
+                            } else {
+                                bail!(
+                                    "command {command_path:?} exited with code 1 \
+                                   for non-deleting action {action:?}"
+                                )
+                            }
+                        }
+                        Some(code) => bail!("command {command_path:?} exited with code {:?}", code),
+                        None => bail!(
+                            "command {command_path:?} was killed by signal {:?}",
+                            status.signal()
+                        ),
+                    }
+                }
             }
         }
         Ok(())
