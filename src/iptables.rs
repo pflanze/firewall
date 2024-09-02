@@ -72,7 +72,7 @@ impl Action {
         }
     }
     /// The sequence of actions that have to be taken for getting the
-    /// effect of the original action on an empty table. None if the
+    /// effect of the original action on an empty table. `None` if the
     /// action is not one that creates something.
     pub fn recreation_sequence(&self) -> Option<Vec<Action>> {
         match self {
@@ -81,6 +81,21 @@ impl Action {
             Action::I(_) => Some(vec![Action::D, self.clone()]),
             Action::Check => None,
             Action::NewChain => Some(vec![Action::Flush, Action::DeleteChain, self.clone()]),
+            Action::DeleteChain => None,
+            Action::Flush => None,
+        }
+    }
+
+    /// The sequence of actions that are *removing* the original
+    /// action. `None` if the action is not one that creates
+    /// something.
+    pub fn deletion_sequence(&self) -> Option<Vec<Action>> {
+        match self {
+            Action::A => Some(vec![Action::D]),
+            Action::D => None,
+            Action::I(_) => Some(vec![Action::D]),
+            Action::Check => None,
+            Action::NewChain => Some(vec![Action::Flush, Action::DeleteChain]),
             Action::DeleteChain => None,
             Action::Flush => None,
         }
@@ -277,29 +292,58 @@ pub struct IptablesWriter {
     actions: Vec<(Action, Rule)>,
 }
 
+/// What end result you want: Deletion inverts the result of an
+/// action. Recreation first deletes then creates. Creation just runs
+/// the originally specified action (rarely what you want).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Effect {
+    Creation,
+    Recreation,
+    Deletion,
+}
+
 impl IptablesWriter {
     pub fn new() -> Self {
         Self {
             actions: Vec::new(),
         }
     }
+
+    /// Pushes the rule to be carried out using the exact given
+    /// action.
     pub fn push(&mut self, action: Action, rule: Rule) {
         self.actions.push((action, rule));
     }
 
-    /// If `action` is not a creative action, warns and runs just
-    /// `action`.
-    pub fn push_recreate(&mut self, action: Action, rule: Rule) {
-        if let Some(seq) = action.recreation_sequence() {
-            for action in seq {
-                self.actions.push((action, rule.clone()));
+    /// Pushes the rule but depending on `want`, will push (also)
+    /// other actions than the given one to achieve what is wanted
+    /// (e.g. chain creation leads to chain flush, delete, creation
+    /// when Effect::Recreation is given). If `action` is not a
+    /// creative action, warns and runs just `action` when creating or
+    /// nothing if Effect::Delete is wanted.
+    pub fn push_wanting(&mut self, want: Effect, action: Action, rule: Rule) {
+        let mut run = |maybe_seq, run_orig_as_fallback| {
+            if let Some(seq) = maybe_seq {
+                for action in seq {
+                    self.actions.push((action, rule.clone()));
+                }
+            } else {
+                eprintln!(
+                    "warning: push_wanting called for an action that doesn't \
+                     create anything: {action:?}"
+                );
+                if run_orig_as_fallback {
+                    self.actions.push((action, rule.clone()));
+                }
             }
-        } else {
-            eprintln!(
-                "warning: push_recreate called for an action that doesn't \
-                       create anything: {action:?}"
-            );
-            self.actions.push((action, rule.clone()));
+        };
+        match want {
+            Effect::Creation => run(
+                Some(vec![action]),
+                false, // branch never taken anyway
+            ),
+            Effect::Recreation => run(action.recreation_sequence(), true),
+            Effect::Deletion => run(action.deletion_sequence(), false),
         }
     }
 
