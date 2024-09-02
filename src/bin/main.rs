@@ -19,7 +19,6 @@ fn main() -> Result<()> {
     };
 
     let mut writer = IptablesWriter::new(vec!["ip6tables".into()]);
-    let action = Action::Append;
     let interfaces = find_network_interfaces()?;
     dbg!(&interfaces);
 
@@ -53,7 +52,7 @@ fn main() -> Result<()> {
             // about the non-existing chain.
             writer.push_wanting(
                 want,
-                action,
+                Action::Append,
                 Rule {
                     chain: our_chain.clone().into(),
                     code: [
@@ -65,7 +64,7 @@ fn main() -> Result<()> {
             );
             writer.push_wanting(
                 want,
-                action,
+                Action::Append,
                 Rule {
                     chain: our_chain.clone().into(),
                     code: ["-i", &interface, "-j", "REJECT"].as_ref().into(),
