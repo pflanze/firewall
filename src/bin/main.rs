@@ -43,7 +43,7 @@ fn main() -> Result<()> {
             Action::Insert(0),
             Rule {
                 chain: chain.clone().into(),
-                code: ["-j", &our_chain.chain_name_for_same_table_as(&chain)].into(),
+                code: ["-j", &our_chain.ensuring_same_table_as(&chain).chain_name()].into(),
             },
         );
     }

@@ -117,8 +117,8 @@ macro_rules! def_chain {
                     _ => name.into()
                 }
             }
-            pub fn chain_name_for_same_table_as(&self, _other: &$typename) -> String {
-                self.chain_name()
+            pub fn ensuring_same_table_as(&self, _other: &$typename) -> &Self {
+                self
             }
         }
         impl From<$typename> for Chain {
