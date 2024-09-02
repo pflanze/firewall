@@ -27,6 +27,7 @@ fn main() -> Result<()> {
             },
         );
     }
+
     for interface in interfaces {
         // Our chain was recreated above, thus `push` suffices here,
         // `push_recreate` is not needed.

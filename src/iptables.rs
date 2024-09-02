@@ -52,6 +52,7 @@ pub enum Action {
     Flush,
 }
 impl Action {
+    /// For collecting the arguments for the iptables command.
     pub fn push_args(&self, chain_name: String, out: &mut Vec<String>) {
         let normal = |name: &str| {
             out.push(name.into());
@@ -216,6 +217,7 @@ impl Chain {
             Chain::Security(c) => ("security", c.chain_name()),
         }
     }
+    /// For collecting the arguments for the iptables command.
     pub fn push_args(&self, action: Action, out: &mut Vec<String>) {
         let (table_name, chain_name) = self.table_and_chain_names();
         out.push("-t".into());
