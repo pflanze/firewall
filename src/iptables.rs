@@ -42,10 +42,10 @@ pub enum Table {
     strum::IntoStaticStr,
 )]
 pub enum Action {
-    A,
+    Append,
     // The following are only for `iptables`-running mode
-    D,
-    I(u32),
+    Delete,
+    Insert(u32),
     Check,
     NewChain,
     DeleteChain,
@@ -59,9 +59,9 @@ impl Action {
             out.push(chain_name);
         };
         match self {
-            Action::A => normal("-A"),
-            Action::D => normal("-D"),
-            Action::I(n) => {
+            Action::Append => normal("-A"),
+            Action::Delete => normal("-D"),
+            Action::Insert(n) => {
                 normal("-I");
                 out.push(format!("{n}"));
             }
@@ -76,9 +76,9 @@ impl Action {
     /// action is not one that creates something.
     pub fn recreation_sequence(&self) -> Option<Vec<Action>> {
         match self {
-            Action::A => Some(vec![Action::D, self.clone()]),
-            Action::D => None,
-            Action::I(_) => Some(vec![Action::D, self.clone()]),
+            Action::Append => Some(vec![Action::Delete, self.clone()]),
+            Action::Delete => None,
+            Action::Insert(_) => Some(vec![Action::Delete, self.clone()]),
             Action::Check => None,
             Action::NewChain => Some(vec![Action::Flush, Action::DeleteChain, self.clone()]),
             Action::DeleteChain => None,
@@ -91,9 +91,9 @@ impl Action {
     /// something.
     pub fn deletion_sequence(&self) -> Option<Vec<Action>> {
         match self {
-            Action::A => Some(vec![Action::D]),
-            Action::D => None,
-            Action::I(_) => Some(vec![Action::D]),
+            Action::Append => Some(vec![Action::Delete]),
+            Action::Delete => None,
+            Action::Insert(_) => Some(vec![Action::Delete]),
             Action::Check => None,
             Action::NewChain => Some(vec![Action::Flush, Action::DeleteChain]),
             Action::DeleteChain => None,
