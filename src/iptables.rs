@@ -70,6 +70,20 @@ impl Action {
             Action::Flush => normal("-F"),
         }
     }
+    /// The sequence of actions that have to be taken for getting the
+    /// effect of the original action on an empty table. None if the
+    /// action is not one that creates something.
+    pub fn recreation_sequence(&self) -> Option<Vec<Action>> {
+        match self {
+            Action::A => Some(vec![Action::D, self.clone()]),
+            Action::D => None,
+            Action::I(_) => Some(vec![Action::D, self.clone()]),
+            Action::Check => None,
+            Action::NewChain => Some(vec![Action::Flush, Action::DeleteChain, self.clone()]),
+            Action::DeleteChain => None,
+            Action::Flush => None,
+        }
+    }
 }
 
 macro_rules! def_chain {
@@ -267,8 +281,19 @@ impl IptablesWriter {
     pub fn push(&mut self, action: Action, rule: Rule) {
         self.actions.push((action, rule));
     }
-    pub fn push_recreate_chain(&mut self, rule: Rule) {
-        for action in [Action::Flush, Action::DeleteChain, Action::NewChain] {
+
+    /// If `action` is not a creative action, warns and runs just
+    /// `action`.
+    pub fn push_recreate(&mut self, action: Action, rule: Rule) {
+        if let Some(seq) = action.recreation_sequence() {
+            for action in seq {
+                self.actions.push((action, rule.clone()));
+            }
+        } else {
+            eprintln!(
+                "warning: push_recreate called for an action that doesn't \
+                       create anything: {action:?}"
+            );
             self.actions.push((action, rule.clone()));
         }
     }

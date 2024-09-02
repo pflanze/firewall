@@ -10,13 +10,16 @@ fn main() -> Result<()> {
 
     let our_chain: Chain = Filter::Custom("our-chain".into()).into();
 
-    writer.push_recreate_chain(Rule {
-        chain: our_chain.clone(),
-        code: "".into(),
-    });
+    writer.push_recreate(
+        Action::NewChain,
+        Rule {
+            chain: our_chain.clone(),
+            code: "".into(),
+        },
+    );
 
     for chain in [Filter::INPUT, Filter::FORWARD] {
-        writer.push(
+        writer.push_recreate(
             Action::I(0),
             Rule {
                 chain: chain.into(),
@@ -25,6 +28,8 @@ fn main() -> Result<()> {
         );
     }
     for interface in interfaces {
+        // Our chain was recreated above, thus `push` suffices here,
+        // `push_recreate` is not needed.
         writer.push(
             action,
             Rule {
