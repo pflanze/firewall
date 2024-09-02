@@ -10,27 +10,10 @@ fn main() -> Result<()> {
 
     let our_chain: Chain = Filter::Custom("our-chain".into()).into();
 
-    writer.push(
-        Action::Flush,
-        Rule {
-            chain: our_chain.clone(),
-            code: "".into(),
-        },
-    );
-    writer.push(
-        Action::DeleteChain,
-        Rule {
-            chain: our_chain.clone(),
-            code: "".into(),
-        },
-    );
-    writer.push(
-        Action::NewChain,
-        Rule {
-            chain: our_chain.clone(),
-            code: "".into(),
-        },
-    );
+    writer.push_recreate_chain(Rule {
+        chain: our_chain.clone(),
+        code: "".into(),
+    });
 
     for chain in [Filter::INPUT, Filter::FORWARD] {
         writer.push(

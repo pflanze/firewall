@@ -210,6 +210,7 @@ impl Chain {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Code(Vec<String>);
 
 impl From<&str> for Code {
@@ -236,6 +237,7 @@ impl Code {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Rule {
     pub chain: Chain,
     pub code: Code,
@@ -264,6 +266,11 @@ impl IptablesWriter {
     }
     pub fn push(&mut self, action: Action, rule: Rule) {
         self.actions.push((action, rule));
+    }
+    pub fn push_recreate_chain(&mut self, rule: Rule) {
+        for action in [Action::Flush, Action::DeleteChain, Action::NewChain] {
+            self.actions.push((action, rule.clone()));
+        }
     }
 
     /// For a dry_run; don't use as shell code, use execute (that can
