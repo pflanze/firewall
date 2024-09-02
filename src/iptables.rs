@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Write};
-
+use std::process::Command;
 use anyhow::Result;
 
 pub fn write_str(out: &mut String, s: &str) {
@@ -227,11 +227,13 @@ impl IptablesWriter {
     pub fn execute(&self, verbose: bool, for_real: bool) -> Result<()> {
         for (action, rule) in &self.actions {
             let args = rule.cmd_args(*action);
+            let mut command = Command::new("iptables");
+            command.args(&args);
             if verbose {
-                eprintln!("+ iptables {args:?}");
+                eprintln!("+ {command:?}");
             }
             if for_real {
-                todo!()
+                command.status()?;
             }
         }
         Ok(())
