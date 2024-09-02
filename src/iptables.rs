@@ -179,6 +179,7 @@ pub enum Security {
 }
 def_chain!(Security);
 
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Chain {
     Filter(Filter),
     Nat(Nat),
@@ -210,6 +211,12 @@ pub struct Code(Vec<String>);
 impl From<&str> for Code {
     fn from(value: &str) -> Self {
         Self(value.split_whitespace().map(|s| s.into()).collect())
+    }
+}
+
+impl From<String> for Code {
+    fn from(value: String) -> Self {
+        (&*value).into()
     }
 }
 
