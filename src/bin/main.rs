@@ -1,5 +1,5 @@
 use anyhow::Result;
-use firewall::iptables::{Action, Chain, Filter, IptablesWriter, Rule};
+use firewall::iptables::{Action, Filter, IptablesWriter, Rule};
 use firewall::network_interfaces::find_network_interfaces;
 
 fn main() -> Result<()> {
@@ -8,12 +8,12 @@ fn main() -> Result<()> {
     let interfaces = find_network_interfaces()?;
     dbg!(&interfaces);
 
-    let our_chain: Chain = Filter::Custom("our-chain".into()).into();
+    let our_chain = Filter::Custom("our-chain".into());
 
     writer.push_recreate(
         Action::NewChain,
         Rule {
-            chain: our_chain.clone(),
+            chain: our_chain.clone().into(),
             code: "".into(),
         },
     );
@@ -23,7 +23,7 @@ fn main() -> Result<()> {
             Action::I(0),
             Rule {
                 chain: chain.into(),
-                code: format!("-j {}", our_chain.table_and_chain_names().1).into(),
+                code: format!("-j {}", our_chain.chain_name_for_same_table_as(&our_chain)).into(),
             },
         );
     }
@@ -34,7 +34,7 @@ fn main() -> Result<()> {
         writer.push(
             action,
             Rule {
-                chain: our_chain.clone(),
+                chain: our_chain.clone().into(),
                 code: [
                     "-i", &interface, "-p", "tcp", "--dport", "9080", "-j", "RETURN",
                 ]
@@ -45,7 +45,7 @@ fn main() -> Result<()> {
         writer.push(
             action,
             Rule {
-                chain: our_chain.clone(),
+                chain: our_chain.clone().into(),
                 code: ["-i", &interface, "-j", "REJECT"].as_ref().into(),
             },
         );
