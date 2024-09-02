@@ -17,8 +17,8 @@ opt-level = "s"
 [dependencies]
 anyhow = "1.0"
 thiserror = "1.0"
-clap = { version = "=3.2.23", features = ["derive"] }
+clap = { version = "3", features = ["derive"] }
 enumn = "0.1"
 strum = { version = "0.20", features = ["derive"] }
 strum_macros = { version = "0.20" }
-nispor = "1.2.19"
+nispor = "=1.2.8"
