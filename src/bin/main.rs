@@ -5,6 +5,10 @@ use firewall::network_interfaces::find_network_interfaces;
 
 #[derive(clap::Parser)]
 struct Args {
+    /// only show, don't do
+    #[clap(short, long)]
+    dry_run: bool,
+
     /// 'start', 'stop', or 'restart'
     action: String,
 }
@@ -74,5 +78,5 @@ fn main() -> Result<()> {
     }
 
     // println!("{}", writer.to_string());
-    writer.execute(true, false)
+    writer.execute(args.dry_run, !args.dry_run)
 }
