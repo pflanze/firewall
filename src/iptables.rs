@@ -397,7 +397,7 @@ impl IptablesWriter {
                             } else {
                                 bail!(
                                     "command {command_path:?} exited with code 1 \
-                                   for non-deleting action {action:?}"
+                                     for non-deleting action {action:?}"
                                 )
                             }
                         }
