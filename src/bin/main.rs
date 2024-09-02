@@ -43,7 +43,7 @@ fn main() -> Result<()> {
             Action::Insert(0),
             Rule {
                 chain: chain.into(),
-                code: format!("-j {}", our_chain.chain_name_for_same_table_as(&our_chain)).into(),
+                code: ["-j", &our_chain.chain_name_for_same_table_as(&our_chain)].into(),
             },
         );
     }
