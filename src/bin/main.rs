@@ -32,63 +32,53 @@ fn main() -> Result<()> {
 
     let our_chain = Filter::Custom("our-chain".into());
 
-    iptables.push_wanting(
-        want,
+    iptables.push(
         Action::NewChain,
         Rule {
             chain: our_chain.clone().into(),
             code: "".into(),
         },
-    );
+    )?;
 
     for chain in [Filter::INPUT, Filter::FORWARD] {
-        iptables.push_wanting(
-            want,
+        iptables.push(
             Action::Insert(0),
             Rule {
                 chain: chain.clone().into(),
                 code: ["-j", &our_chain.ensuring_same_table_as(&chain).chain_name()].into(),
             },
-        );
+        )?;
     }
 
-    if want != Effect::Deletion {
-        for interface in interfaces {
-            // Our chain was recreated above, thus `push` would suffice
-            // here, but for "stop" we need to revert, so use it
-            // anyway. Instead, run this conditionally to avoid errors
-            // about the non-existing chain.
-            for port in [22, 80, 9080] {
-                iptables.push_wanting(
-                    want,
-                    Action::Append,
-                    Rule {
-                        chain: our_chain.clone().into(),
-                        code: [
-                            "-i",
-                            &interface,
-                            "-p",
-                            "tcp",
-                            "--dport",
-                            &port.to_string(),
-                            "-j",
-                            "RETURN",
-                        ]
-                        .into(),
-                    },
-                );
-            }
-            iptables.push_wanting(
-                want,
+    for interface in interfaces {
+        for port in [22, 80, 9080] {
+            iptables.push(
                 Action::Append,
                 Rule {
                     chain: our_chain.clone().into(),
-                    code: ["-i", &interface, "-j", "REJECT"].into(),
+                    code: [
+                        "-i",
+                        &interface,
+                        "-p",
+                        "tcp",
+                        "--dport",
+                        &port.to_string(),
+                        "-j",
+                        "RETURN",
+                    ]
+                    .into(),
                 },
-            );
+            )?;
         }
+        iptables.push(
+            Action::Append,
+            Rule {
+                chain: our_chain.clone().into(),
+                code: ["-i", &interface, "-j", "REJECT"].into(),
+            },
+        )?;
     }
 
     // println!("{}", writer.to_string());
-    iptables.execute(args.dry_run || args.verbose, !args.dry_run)
+    iptables.execute(want, args.dry_run || args.verbose, !args.dry_run)
 }

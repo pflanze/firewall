@@ -74,20 +74,6 @@ impl Action {
             Action::Flush => normal("-F"),
         }
     }
-    /// The sequence of actions that have to be taken for getting the
-    /// effect of the original action on an empty table. `None` if the
-    /// action is not one that creates something.
-    pub fn recreation_sequence(&self) -> Option<Vec<Action>> {
-        match self {
-            Action::Append => Some(vec![Action::Delete, self.clone()]),
-            Action::Delete => None,
-            Action::Insert(_) => Some(vec![Action::Delete, self.clone()]),
-            Action::Check => None,
-            Action::NewChain => Some(vec![Action::Flush, Action::DeleteChain, self.clone()]),
-            Action::DeleteChain => None,
-            Action::Flush => None,
-        }
-    }
 
     /// The sequence of actions that are *removing* the original
     /// action. `None` if the action is not one that creates
@@ -336,46 +322,35 @@ impl IptablesWriter {
         }
     }
 
-    /// Pushes the rule to be carried out using the exact given
-    /// action.
-    pub fn push(&mut self, action: Action, rule: Rule) {
+    /// Pushes the rule with the corresponding action regardless of
+    /// whether the action is creative or other. You usually don't
+    /// want to use this, but rather `push` instead.
+    pub fn _push(&mut self, action: Action, rule: Rule) {
         self.actions.push((action, rule));
     }
 
-    /// Pushes the rule but depending on `want`, will push (also)
-    /// other actions than the given one to achieve what is wanted
-    /// (e.g. chain creation leads to chain flush, delete, creation
-    /// when Effect::Recreation is given). If `action` is not a
-    /// creative action, warns and runs just `action` when creating or
-    /// nothing if Effect::Delete is wanted.
-    pub fn push_wanting(&mut self, want: Effect, action: Action, rule: Rule) {
-        let mut run = |maybe_seq: Option<&[Action]>, run_orig_as_fallback| {
-            if let Some(seq) = maybe_seq {
-                for action in seq {
-                    self.actions.push((*action, rule.clone()));
-                }
-            } else {
-                eprintln!(
-                    "warning: push_wanting called for an action that doesn't \
-                     create anything: {action:?}"
-                );
-                if run_orig_as_fallback {
-                    self.actions.push((action, rule.clone()));
-                }
-            }
-        };
-        match want {
-            Effect::Creation => run(
-                Some(&vec![action]),
-                false, // branch never taken anyway
-            ),
-            Effect::Recreation => run(action.recreation_sequence().as_deref(), true),
-            Effect::Deletion => run(action.deletion_sequence(), false),
+    /// Pushes the rule, but accepts only creative actions. Because
+    /// deleting actions are usually done via running `execute` with
+    /// an Effect that deletes (including recreation), they are
+    /// automatically derived there. Also, deleting `Effect`s lead to
+    /// the reversal of the order of rule application; hence call
+    /// `push` always in the order appropriate for the creation of
+    /// rules.
+    pub fn push(&mut self, action: Action, rule: Rule) -> Result<()> {
+        if action.is_creation() {
+            self._push(action, rule);
+            Ok(())
+        } else {
+            bail!(
+                "warning: push_wanting called for an action that doesn't \
+                 create anything: {action:?}"
+            )
         }
     }
 
     /// For a dry_run; don't use as shell code, use execute (that can
-    /// use cmd_args directly)!
+    /// use cmd_args directly)! -- todo: needs to be updated with an
+    /// Effect
     pub fn to_string(&self) -> String {
         let mut out = String::new();
         for (action, rule) in &self.actions {
@@ -396,49 +371,81 @@ impl IptablesWriter {
         code == 1 || code == 2
     }
 
-    /// Execute for real if true is given.
-    pub fn execute(&self, verbose: bool, for_real: bool) -> Result<()> {
+    /// Turn the pushed rules into rules for actual execution
+    /// according to the wanted Effect. Execute for real if true is
+    /// given.
+    pub fn execute(&self, want: Effect, verbose: bool, for_real: bool) -> Result<()> {
         let mut cmd = self.iptables_cmd.clone().into_iter();
         let command_path = cmd
             .next()
             .ok_or_else(|| anyhow!("iptables_cmd value is empty"))?;
         let command_base_args: Vec<String> = cmd.collect();
-        for (action, rule) in &self.actions {
-            let mut args = rule.cmd_args(*action);
-            let mut all_args = command_base_args.clone();
-            all_args.append(&mut args);
-            let mut command = Command::new(command_path.clone());
-            command.args(&all_args);
-            if verbose {
-                eprintln!("+ {command:?}");
-            }
-            if for_real {
-                let output = command.output()?;
-                let status = output.status;
-                if !status.success() {
-                    match status.code() {
-                        Some(code) if Self::exitcode_is_ok_for_deletions(code) => {
-                            if !action.is_creation() {
-                                ()
-                            } else {
-                                bail!(
-                                    "command {command:?} exited with code {code} \
-                                     for non-deleting action {action:?}: {}",
+
+        let run = |creation: bool| -> Result<()> {
+            let actions: Box<dyn Iterator<Item = _>> = if creation {
+                Box::new(self.actions.iter())
+            } else {
+                Box::new(self.actions.iter().rev())
+            };
+
+            for (action, rule) in actions {
+                let _actions = &[*action];
+                let actions = if creation {
+                    _actions
+                } else {
+                    action.deletion_sequence().expect(
+                        "should not have non-creating actions when using deleting \
+                                 `Effect`s, apparently you used `_push`?",
+                    )
+                };
+                for action in actions {
+                    let mut args = rule.cmd_args(*action);
+                    let mut all_args = command_base_args.clone();
+                    all_args.append(&mut args);
+                    let mut command = Command::new(command_path.clone());
+                    command.args(&all_args);
+                    if verbose {
+                        eprintln!("+ {command:?}");
+                    }
+                    if for_real {
+                        let output = command.output()?;
+                        let status = output.status;
+                        if !status.success() {
+                            match status.code() {
+                                Some(code) if Self::exitcode_is_ok_for_deletions(code) => {
+                                    if !action.is_creation() {
+                                        ()
+                                    } else {
+                                        bail!(
+                                            "command {command:?} exited with code {code} \
+                                             for non-deleting action {action:?}: {}",
+                                            output.combined_string()
+                                        )
+                                    }
+                                }
+                                Some(code) => bail!(
+                                    "command {command:?} exited with code {code}: {}",
                                     output.combined_string()
-                                )
+                                ),
+                                None => bail!(
+                                    "command {command:?} was killed by signal {:?}",
+                                    status.signal()
+                                ),
                             }
                         }
-                        Some(code) => bail!(
-                            "command {command:?} exited with code {code}: {}",
-                            output.combined_string()
-                        ),
-                        None => bail!(
-                            "command {command:?} was killed by signal {:?}",
-                            status.signal()
-                        ),
                     }
                 }
             }
+            Ok(())
+        };
+
+        match want {
+            Effect::Creation => run(true)?,
+            Effect::Recreation => {
+                run(false)?;
+                run(true)?;
+            }
+            Effect::Deletion => run(false)?,
         }
         Ok(())
     }
