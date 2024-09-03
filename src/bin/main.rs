@@ -22,13 +22,13 @@ fn main() -> Result<()> {
         _ => bail!("invalid action {:?}", args.action),
     };
 
-    let mut writer = IptablesWriter::new(vec!["ip6tables".into()]);
+    let mut iptables = IptablesWriter::new(vec!["ip6tables".into()]);
     let interfaces = find_network_interfaces()?;
     dbg!(&interfaces);
 
     let our_chain = Filter::Custom("our-chain".into());
 
-    writer.push_wanting(
+    iptables.push_wanting(
         want,
         Action::NewChain,
         Rule {
@@ -38,7 +38,7 @@ fn main() -> Result<()> {
     );
 
     for chain in [Filter::INPUT, Filter::FORWARD] {
-        writer.push_wanting(
+        iptables.push_wanting(
             want,
             Action::Insert(0),
             Rule {
@@ -54,7 +54,7 @@ fn main() -> Result<()> {
             // here, but for "stop" we need to revert, so use it
             // anyway. Instead, run this conditionally to avoid errors
             // about the non-existing chain.
-            writer.push_wanting(
+            iptables.push_wanting(
                 want,
                 Action::Append,
                 Rule {
@@ -65,7 +65,7 @@ fn main() -> Result<()> {
                     .into(),
                 },
             );
-            writer.push_wanting(
+            iptables.push_wanting(
                 want,
                 Action::Append,
                 Rule {
@@ -77,5 +77,5 @@ fn main() -> Result<()> {
     }
 
     // println!("{}", writer.to_string());
-    writer.execute(args.dry_run, !args.dry_run)
+    iptables.execute(args.dry_run, !args.dry_run)
 }
