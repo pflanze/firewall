@@ -46,8 +46,8 @@ pub enum Table {
 )]
 pub enum Action {
     Append,
-    // The following are only for `iptables`-running mode
     Delete,
+    /// Insert is holding a 1-based index
     Insert(u32),
     Check,
     NewChain,

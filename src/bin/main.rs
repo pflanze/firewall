@@ -42,7 +42,7 @@ fn main() -> Result<()> {
 
     for chain in [Filter::INPUT, Filter::FORWARD] {
         iptables.push(
-            Action::Insert(0),
+            Action::Insert(1),
             Rule {
                 chain: chain.clone().into(),
                 code: ["-j", &our_chain.ensuring_same_table_as(&chain).chain_name()].into(),
