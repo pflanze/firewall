@@ -386,6 +386,14 @@ impl IptablesWriter {
         out
     }
 
+    fn exitcode_is_ok_for_deletions(code: i32) -> bool {
+        // It appears that iptables exits with code 1 *or* 2 when
+        // chain doesn't exist, 1 for rule that doesn't exist, 4 when
+        // not running as root or when "Device or resource busy"
+        // because a chain, while empty, is still referenced.
+        code == 1 || code == 2
+    }
+
     /// Execute for real if true is given.
     pub fn execute(&self, verbose: bool, for_real: bool) -> Result<()> {
         let mut cmd = self.iptables_cmd.clone().into_iter();
@@ -406,20 +414,17 @@ impl IptablesWriter {
                 let status = command.status()?;
                 if !status.success() {
                     match status.code() {
-                        Some(1) => {
+                        Some(code) if Self::exitcode_is_ok_for_deletions(code) => {
                             if !action.is_creation() {
-                                // XX is it correct to assume that the
-                                // commands exits with code 1 for match
-                                // failures?
                                 ()
                             } else {
                                 bail!(
-                                    "command {command_path:?} exited with code 1 \
+                                    "command {command_path:?} exited with code {code} \
                                      for non-deleting action {action:?}"
                                 )
                             }
                         }
-                        Some(code) => bail!("command {command_path:?} exited with code {:?}", code),
+                        Some(code) => bail!("command {command_path:?} exited with code {code}"),
                         None => bail!(
                             "command {command_path:?} was killed by signal {:?}",
                             status.signal()
