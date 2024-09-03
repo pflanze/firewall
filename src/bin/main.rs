@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use clap::Parser;
-use firewall::iptables::{Action, Effect, Filter, IptablesWriter, Rule};
+use firewall::iptables::{Action, Effect, Filter, IptablesWriter, RecreatingMode, Rule};
 use firewall::network_interfaces::find_network_interfaces;
 
 #[derive(clap::Parser)]
@@ -38,6 +38,7 @@ fn main() -> Result<()> {
             chain: our_chain.clone().into(),
             code: "".into(),
         },
+        RecreatingMode::Owned
     )?;
 
     for chain in [Filter::INPUT, Filter::FORWARD] {
@@ -47,6 +48,7 @@ fn main() -> Result<()> {
                 chain: chain.clone().into(),
                 code: ["-j", &our_chain.ensuring_same_table_as(&chain).chain_name()].into(),
             },
+            RecreatingMode::Owned
         )?;
     }
 
@@ -68,6 +70,7 @@ fn main() -> Result<()> {
                     ]
                     .into(),
                 },
+                RecreatingMode::Owned
             )?;
         }
         iptables.push(
@@ -76,6 +79,7 @@ fn main() -> Result<()> {
                 chain: our_chain.clone().into(),
                 code: ["-i", &interface, "-j", "REJECT"].into(),
             },
+            RecreatingMode::Owned
         )?;
     }
 

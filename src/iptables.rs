@@ -301,7 +301,7 @@ impl Rule {
 
 pub struct IptablesWriter {
     iptables_cmd: Vec<String>,
-    actions: Vec<(Action, Rule)>,
+    actions: Vec<(Action, Rule, RecreatingMode)>,
 }
 
 /// What end result you want: Deletion inverts the result of an
@@ -312,6 +312,12 @@ pub enum Effect {
     Creation,
     Recreation,
     Deletion,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecreatingMode {
+    Owned,
+    TryCreationNoDeletion,
 }
 
 impl IptablesWriter {
@@ -325,8 +331,8 @@ impl IptablesWriter {
     /// Pushes the rule with the corresponding action regardless of
     /// whether the action is creative or other. You usually don't
     /// want to use this, but rather `push` instead.
-    pub fn _push(&mut self, action: Action, rule: Rule) {
-        self.actions.push((action, rule));
+    pub fn _push(&mut self, action: Action, rule: Rule, recreating_mode: RecreatingMode) {
+        self.actions.push((action, rule, recreating_mode));
     }
 
     /// Pushes the rule, but accepts only creative actions. Because
@@ -336,9 +342,14 @@ impl IptablesWriter {
     /// the reversal of the order of rule application; hence call
     /// `push` always in the order appropriate for the creation of
     /// rules.
-    pub fn push(&mut self, action: Action, rule: Rule) -> Result<()> {
+    pub fn push(
+        &mut self,
+        action: Action,
+        rule: Rule,
+        recreating_mode: RecreatingMode,
+    ) -> Result<()> {
         if action.is_creation() {
-            self._push(action, rule);
+            self._push(action, rule, recreating_mode);
             Ok(())
         } else {
             bail!(
@@ -353,7 +364,7 @@ impl IptablesWriter {
     /// Effect
     pub fn to_string(&self) -> String {
         let mut out = String::new();
-        for (action, rule) in &self.actions {
+        for (action, rule, _) in &self.actions {
             for arg in rule.cmd_args(*action) {
                 write_str(&mut out, " ");
                 write_str(&mut out, &arg);
@@ -388,7 +399,15 @@ impl IptablesWriter {
                 Box::new(self.actions.iter().rev())
             };
 
-            for (action, rule) in actions {
+            for (action, rule, recreating_mode) in actions {
+                match recreating_mode {
+                    RecreatingMode::Owned => {}
+                    RecreatingMode::TryCreationNoDeletion => {
+                        if !creation {
+                            continue;
+                        }
+                    }
+                }
                 let _actions = &[*action];
                 let actions = if creation {
                     _actions
@@ -416,11 +435,14 @@ impl IptablesWriter {
                                     if !action.is_creation() {
                                         ()
                                     } else {
-                                        bail!(
-                                            "command {command:?} exited with code {code} \
+                                        match recreating_mode {
+                                            RecreatingMode::Owned => bail!(
+                                                "command {command:?} exited with code {code} \
                                              for non-deleting action {action:?}: {}",
-                                            output.combined_string()
-                                        )
+                                                output.combined_string()
+                                            ),
+                                            RecreatingMode::TryCreationNoDeletion => {}
+                                        }
                                     }
                                 }
                                 Some(code) => bail!(
