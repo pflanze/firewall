@@ -9,6 +9,10 @@ struct Args {
     #[clap(short, long)]
     dry_run: bool,
 
+    /// always show
+    #[clap(short, long)]
+    verbose: bool,
+
     /// 'start', 'stop', or 'restart'
     action: String,
 }
@@ -86,5 +90,5 @@ fn main() -> Result<()> {
     }
 
     // println!("{}", writer.to_string());
-    iptables.execute(args.dry_run, !args.dry_run)
+    iptables.execute(args.dry_run || args.verbose, !args.dry_run)
 }
