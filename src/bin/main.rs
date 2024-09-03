@@ -54,17 +54,26 @@ fn main() -> Result<()> {
             // here, but for "stop" we need to revert, so use it
             // anyway. Instead, run this conditionally to avoid errors
             // about the non-existing chain.
-            iptables.push_wanting(
-                want,
-                Action::Append,
-                Rule {
-                    chain: our_chain.clone().into(),
-                    code: [
-                        "-i", &interface, "-p", "tcp", "--dport", "9080", "-j", "RETURN",
-                    ]
-                    .into(),
-                },
-            );
+            for port in [22, 80, 9080] {
+                iptables.push_wanting(
+                    want,
+                    Action::Append,
+                    Rule {
+                        chain: our_chain.clone().into(),
+                        code: [
+                            "-i",
+                            &interface,
+                            "-p",
+                            "tcp",
+                            "--dport",
+                            &port.to_string(),
+                            "-j",
+                            "RETURN",
+                        ]
+                        .into(),
+                    },
+                );
+            }
             iptables.push_wanting(
                 want,
                 Action::Append,
