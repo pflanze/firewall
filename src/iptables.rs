@@ -3,6 +3,8 @@ use std::fmt::{Debug, Write};
 use std::os::unix::process::ExitStatusExt;
 use std::process::Command;
 
+use crate::command_util::CombinedString;
+
 pub fn write_str(out: &mut String, s: &str) {
     out.write_str(s).unwrap(); // can't ever fail, no?
 }
@@ -411,7 +413,8 @@ impl IptablesWriter {
                 eprintln!("+ {command:?}");
             }
             if for_real {
-                let status = command.status()?;
+                let output = command.output()?;
+                let status = output.status;
                 if !status.success() {
                     match status.code() {
                         Some(code) if Self::exitcode_is_ok_for_deletions(code) => {
@@ -419,14 +422,18 @@ impl IptablesWriter {
                                 ()
                             } else {
                                 bail!(
-                                    "command {command_path:?} exited with code {code} \
-                                     for non-deleting action {action:?}"
+                                    "command {command:?} exited with code {code} \
+                                     for non-deleting action {action:?}: {}",
+                                    output.combined_string()
                                 )
                             }
                         }
-                        Some(code) => bail!("command {command_path:?} exited with code {code}"),
+                        Some(code) => bail!(
+                            "command {command:?} exited with code {code}: {}",
+                            output.combined_string()
+                        ),
                         None => bail!(
-                            "command {command_path:?} was killed by signal {:?}",
+                            "command {command:?} was killed by signal {:?}",
                             status.signal()
                         ),
                     }
