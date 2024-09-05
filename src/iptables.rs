@@ -95,29 +95,39 @@ impl Action {
     }
 }
 
+pub trait TablechainTrait {
+    fn chain_name(&self) -> String;
+    fn table_and_chain_names(&self) -> (String, String);
+    
+    /// For collecting the arguments for the iptables command.
+    fn push_args(&self, action: Action, out: &mut Vec<String>) {
+        let (table_name, chain_name) = self.table_and_chain_names();
+        out.push("-t".into());
+        out.push(table_name.into());
+        action.push_args(chain_name, out);
+    }
+}
+
 macro_rules! def_chain {
     { $typename:tt } => {
-        impl $typename {
-            pub fn chain_name(&self) -> String {
+        impl TablechainTrait for $typename {
+            fn chain_name(&self) -> String {
                 let name: &'static str = self.into();
                 match self {
                     $typename::Custom(s) => s.into(),
                     _ => name.into()
                 }
             }
-            pub fn table_and_chain_names(&self) -> (String, String) {
+            fn table_and_chain_names(&self) -> (String, String) {
                 (
                     String::from(stringify!($typename)).to_lowercase(),
                     self.chain_name()
                 )
             }
-            pub fn ensuring_same_table_as(&self, _other: &$typename) -> &Self {
-                self
-            }
         }
-        impl From<$typename> for Chain {
+        impl From<$typename> for TablechainEnum {
             fn from(value: $typename) -> Self {
-                Chain::$typename(value)
+                TablechainEnum::$typename(value)
             }
         }
     }
@@ -216,7 +226,7 @@ pub enum Security {
 def_chain!(Security);
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Chain {
+pub enum TablechainEnum {
     Filter(Filter),
     Nat(Nat),
     Mangle(Mangle),
@@ -224,90 +234,111 @@ pub enum Chain {
     Security(Security),
 }
 
-impl Chain {
+impl TablechainEnum {
     pub fn table_and_chain_names(&self) -> (String, String) {
         match self {
-            Chain::Filter(c) => c.table_and_chain_names(),
-            Chain::Nat(c) => c.table_and_chain_names(),
-            Chain::Mangle(c) => c.table_and_chain_names(),
-            Chain::Raw(c) => c.table_and_chain_names(),
-            Chain::Security(c) => c.table_and_chain_names(),
+            TablechainEnum::Filter(c) => c.table_and_chain_names(),
+            TablechainEnum::Nat(c) => c.table_and_chain_names(),
+            TablechainEnum::Mangle(c) => c.table_and_chain_names(),
+            TablechainEnum::Raw(c) => c.table_and_chain_names(),
+            TablechainEnum::Security(c) => c.table_and_chain_names(),
         }
     }
-    /// For collecting the arguments for the iptables command.
-    pub fn push_args(&self, action: Action, out: &mut Vec<String>) {
-        let (table_name, chain_name) = self.table_and_chain_names();
-        out.push("-t".into());
-        out.push(table_name.into());
-        action.push_args(chain_name, out);
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Restriction {
+    Interface(String),
+    Protocol(&'static str), // ?
+    DestinationPort(u16),
+    
+}
+
+impl Restriction {
+    fn push_args(&self, out: &mut Vec<String>) {
+        match self {
+            Restriction::Interface(s) => {
+                out.push("-i".into());
+                out.push(s.into());
+            }
+            Restriction::Protocol(s) => {
+                out.push("-p".into());
+                out.push((*s).into());
+            }
+            Restriction::DestinationPort(n) => {
+                out.push("--dport".into());
+                out.push(n.to_string());
+            }
+        }
+    }
+}
+
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum RuleAction<C: TablechainTrait> {
+    None,
+    Return,
+    Drop,
+    Reject,
+    Goto(C)
+}
+
+impl<C: TablechainTrait> RuleAction<C> {
+    fn push_args(&self, out: &mut Vec<String>) {
+        match self {
+            RuleAction::Return => {
+                out.push("-j".into());
+                out.push("RETURN".into());
+            }
+            RuleAction::Drop => {
+                out.push("-j".into());
+                out.push("DROP".into());
+            }
+            RuleAction::Reject => {
+                out.push("-j".into());
+                out.push("REJECT".into());
+            }
+            RuleAction::Goto(c) => {
+                out.push("-j".into());
+                out.push(c.chain_name());
+            }
+            RuleAction::None => {}
+        }
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Code(Vec<String>);
-
-impl From<&str> for Code {
-    fn from(value: &str) -> Self {
-        Self(value.split_whitespace().map(|s| s.into()).collect())
-    }
+pub struct Rule<C: TablechainTrait> {
+    pub chain: C,
+    pub restrictions: Vec<Restriction>,
+    pub rule_action: RuleAction<C>
 }
 
-impl From<String> for Code {
-    fn from(value: String) -> Self {
-        (&*value).into()
-    }
-}
-
-impl From<&[&str]> for Code {
-    fn from(value: &[&str]) -> Self {
-        Self(value.iter().map(|s| (*s).into()).collect())
-    }
-}
-
-impl<const N: usize> From<[&str; N]> for Code {
-    fn from(value: [&str; N]) -> Self {
-        value.as_ref().into()
-    }
-}
-
-impl From<&[String]> for Code {
-    fn from(value: &[String]) -> Self {
-        Self(value.into())
-    }
-}
-
-impl<const N: usize> From<[String; N]> for Code {
-    fn from(value: [String; N]) -> Self {
-        value.as_ref().into()
-    }
-}
-
-impl Code {
-    pub fn args(&self) -> &[String] {
-        &self.0
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Rule {
-    pub chain: Chain,
-    pub code: Code,
-}
-
-impl Rule {
+impl<C: TablechainTrait> Rule<C> {
     pub fn cmd_args(&self, action: Action) -> Vec<String> {
         let mut out = Vec::new();
         self.chain.push_args(action, &mut out);
-        for arg in self.code.args() {
-            out.push(arg.clone());
+        for r in &self.restrictions {
+            r.push_args(&mut out);
         }
+        self.rule_action.push_args(&mut out);
         out
+    }
+}
+
+pub trait RuleTrait {
+    fn cmd_args(&self, action: Action) -> Vec<String>;
+}
+
+impl<C: TablechainTrait> RuleTrait for Rule<C> {
+    fn cmd_args(&self, action: Action) -> Vec<String> {
+        self.cmd_args(action)
     }
 }
 
 pub struct IptablesWriter {
     iptables_cmd: Vec<String>,
-    actions: Vec<(Action, Rule, RecreatingMode)>,
+    actions: Vec<(Action, Box<dyn RuleTrait>, RecreatingMode)>,
 }
 
 /// What end result you want: Deletion inverts the result of an
@@ -337,8 +368,10 @@ impl IptablesWriter {
     /// Pushes the rule with the corresponding action regardless of
     /// whether the action is creative or other. You usually don't
     /// want to use this, but rather `push` instead.
-    pub fn _push(&mut self, action: Action, rule: Rule, recreating_mode: RecreatingMode) {
-        self.actions.push((action, rule, recreating_mode));
+    pub fn _push<T: TablechainTrait + 'static>(
+        &mut self, action: Action, rule: Rule<T>, recreating_mode: RecreatingMode
+    ) {
+        self.actions.push((action, Box::new(rule), recreating_mode));
     }
 
     /// Pushes the rule, but accepts only creative actions. Because
@@ -348,10 +381,10 @@ impl IptablesWriter {
     /// the reversal of the order of rule application; hence call
     /// `push` always in the order appropriate for the creation of
     /// rules.
-    pub fn push(
+    pub fn push<T: TablechainTrait + 'static>(
         &mut self,
         action: Action,
-        rule: Rule,
+        rule: Rule<T>,
         recreating_mode: RecreatingMode,
     ) -> Result<()> {
         if action.is_creation() {

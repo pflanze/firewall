@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use clap::Parser;
-use firewall::iptables::{Action, Effect, Filter, IptablesWriter, RecreatingMode, Rule};
+use firewall::iptables::{Action, Effect, Filter, IptablesWriter, RecreatingMode, Rule, RuleAction, Restriction};
 use firewall::network_interfaces::find_network_interfaces;
 
 #[derive(clap::Parser)]
@@ -44,8 +44,9 @@ fn main() -> Result<()> {
     iptables.push(
         Action::NewChain,
         Rule {
-            chain: our_chain.clone().into(),
-            code: "".into(),
+            chain: our_chain.clone(),
+            restrictions: vec![],
+            rule_action: RuleAction::None,
         },
         RecreatingMode::Owned
     )?;
@@ -54,8 +55,9 @@ fn main() -> Result<()> {
         iptables.push(
             Action::Insert(1),
             Rule {
-                chain: chain.clone().into(),
-                code: ["-j", &our_chain.ensuring_same_table_as(&chain).chain_name()].into(),
+                chain: chain.clone(),
+                restrictions: vec![],
+                rule_action: RuleAction::Goto(our_chain.clone())
             },
             RecreatingMode::Owned
         )?;
@@ -66,18 +68,13 @@ fn main() -> Result<()> {
             iptables.push(
                 Action::Append,
                 Rule {
-                    chain: our_chain.clone().into(),
-                    code: [
-                        "-i",
-                        &interface,
-                        "-p",
-                        "tcp",
-                        "--dport",
-                        &port.to_string(),
-                        "-j",
-                        "RETURN",
-                    ]
-                    .into(),
+                    chain: our_chain.clone(),
+                    restrictions: vec![
+                        Restriction::Interface(interface.clone()),
+                        Restriction::Protocol("tcp"),
+                        Restriction::DestinationPort(port)
+                    ],
+                    rule_action: RuleAction::Return
                 },
                 RecreatingMode::Owned
             )?;
@@ -85,8 +82,11 @@ fn main() -> Result<()> {
         iptables.push(
             Action::Append,
             Rule {
-                chain: our_chain.clone().into(),
-                code: ["-i", &interface, "-j", "REJECT"].into(),
+                chain: our_chain.clone(),
+                restrictions: vec![
+                    Restriction::Interface(interface.clone()),
+                ],
+                rule_action: RuleAction::Reject
             },
             RecreatingMode::Owned
         )?;
