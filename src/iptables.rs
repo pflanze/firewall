@@ -105,6 +105,12 @@ macro_rules! def_chain {
                     _ => name.into()
                 }
             }
+            pub fn table_and_chain_names(&self) -> (String, String) {
+                (
+                    String::from(stringify!($typename)).to_lowercase(),
+                    self.chain_name()
+                )
+            }
             pub fn ensuring_same_table_as(&self, _other: &$typename) -> &Self {
                 self
             }
@@ -219,13 +225,13 @@ pub enum Chain {
 }
 
 impl Chain {
-    pub fn table_and_chain_names(&self) -> (&'static str, String) {
+    pub fn table_and_chain_names(&self) -> (String, String) {
         match self {
-            Chain::Filter(c) => ("filter", c.chain_name()),
-            Chain::Nat(c) => ("nat", c.chain_name()),
-            Chain::Mangle(c) => ("mangle", c.chain_name()),
-            Chain::Raw(c) => ("raw", c.chain_name()),
-            Chain::Security(c) => ("security", c.chain_name()),
+            Chain::Filter(c) => c.table_and_chain_names(),
+            Chain::Nat(c) => c.table_and_chain_names(),
+            Chain::Mangle(c) => c.table_and_chain_names(),
+            Chain::Raw(c) => c.table_and_chain_names(),
+            Chain::Security(c) => c.table_and_chain_names(),
         }
     }
     /// For collecting the arguments for the iptables command.
