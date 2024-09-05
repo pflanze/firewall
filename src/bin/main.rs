@@ -13,6 +13,11 @@ struct Args {
     #[clap(short, long)]
     verbose: bool,
 
+    /// instead of running over all auto-detected ethernet interfaces,
+    /// run for these specified interfaces.
+    #[clap(short, long, multiple(true))]
+    interfaces: Vec<String>,
+    
     /// 'start', 'stop', or 'restart'
     action: String,
 }
@@ -27,8 +32,12 @@ fn main() -> Result<()> {
     };
 
     let mut iptables = IptablesWriter::new(vec!["ip6tables".into()]);
-    let interfaces = find_network_interfaces()?;
-    dbg!(&interfaces);
+    let interfaces =
+        if args.interfaces.is_empty() {
+            find_network_interfaces()?
+        } else {
+            args.interfaces
+        };
 
     let our_chain = Filter::Custom("our-chain".into());
 
