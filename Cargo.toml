@@ -22,3 +22,4 @@ enumn = "0.1"
 strum = { version = "0.20", features = ["derive"] }
 strum_macros = { version = "0.20" }
 nispor = "=1.2.8"
+ipnet = "2.9"
