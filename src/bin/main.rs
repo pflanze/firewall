@@ -1,9 +1,10 @@
 use anyhow::{bail, Result};
 use clap::Parser;
 use firewall::iptables::{
-    Action, Effect, Filter, IptablesWriter, RecreatingMode, Restriction, Rule, RuleAction,
+    Action, Effect, Filter, IptablesWriter, RecreatingMode, Rule, RuleAction,
 };
 use firewall::network_interfaces::find_network_interfaces;
+use firewall::restrictions;
 
 #[derive(clap::Parser)]
 struct Args {
@@ -58,7 +59,7 @@ fn main() -> Result<()> {
             Rule {
                 chain: chain.clone(),
                 restrictions: vec![],
-                rule_action: RuleAction::Goto(our_chain.clone()),
+                rule_action: RuleAction::Jump(our_chain.clone()),
             },
             RecreatingMode::Owned,
         )?;
@@ -70,10 +71,10 @@ fn main() -> Result<()> {
                 Action::Append,
                 Rule {
                     chain: our_chain.clone(),
-                    restrictions: vec![
-                        Restriction::Interface(interface.clone()),
-                        Restriction::Protocol("tcp"),
-                        Restriction::DestinationPort(port),
+                    restrictions: restrictions![
+                        Interface(Is, interface.clone()),
+                        Protocol(Is, Tcp),
+                        DestinationPort(Is, port),
                     ],
                     rule_action: RuleAction::Return,
                 },
@@ -84,7 +85,7 @@ fn main() -> Result<()> {
             Action::Append,
             Rule {
                 chain: our_chain.clone(),
-                restrictions: vec![Restriction::Interface(interface.clone())],
+                restrictions: restrictions![Interface(Is, interface.clone()),],
                 rule_action: RuleAction::Reject,
             },
             RecreatingMode::Owned,

@@ -1,9 +1,11 @@
 use anyhow::{anyhow, bail, Result};
+use ipnet::Ipv4Net;
 use std::fmt::{Debug, Write};
 use std::os::unix::process::ExitStatusExt;
 use std::process::Command;
 
 use crate::command_util::CombinedString;
+use crate::with_lcstring_conversion;
 
 pub fn write_str(out: &mut String, s: &str) {
     out.write_str(s).unwrap(); // can't ever fail, no?
@@ -246,28 +248,93 @@ impl TablechainEnum {
     }
 }
 
+with_lcstring_conversion! {
+    pub enum Protocol {
+        All,
+        Tcp,
+        Udp,
+        Udplite,
+        Icmp,
+        Icmpv6,
+        Esp,
+        Ah,
+        Sctp,
+        Mh
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Negatable {
+    Is,
+    IsNot,
+}
+
+impl Negatable {
+    fn push_args(&self, out: &mut Vec<String>) {
+        match self {
+            Negatable::Is => (),
+            Negatable::IsNot => out.push("!".into()),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Restriction {
-    Interface(String),
-    Protocol(&'static str), // ?
-    DestinationPort(u16),
+    Interface(Negatable, String),
+    Protocol(Negatable, Protocol),
+    SourceAddress(Negatable, Ipv4Net),
+    DestinationAddress(Negatable, Ipv4Net),
+    SourcePort(Negatable, u16),
+    DestinationPort(Negatable, u16),
 }
 
 impl Restriction {
     fn push_args(&self, out: &mut Vec<String>) {
         match self {
-            Restriction::Interface(s) => {
+            Restriction::Interface(neg, s) => {
                 out.push("-i".into());
+                neg.push_args(out);
                 out.push(s.into());
             }
-            Restriction::Protocol(s) => {
+            Restriction::Protocol(neg, s) => {
                 out.push("-p".into());
-                out.push((*s).into());
+                neg.push_args(out);
+                out.push(s.into());
             }
-            Restriction::DestinationPort(n) => {
-                out.push("--dport".into());
+            Restriction::SourceAddress(neg, net) => {
+                out.push("-s".into());
+                neg.push_args(out);
+                out.push(net.to_string()); // XX ?
+            }
+            Restriction::DestinationAddress(neg, net) => {
+                out.push("-d".into());
+                neg.push_args(out);
+                out.push(net.to_string()); // XX ?
+            }
+            Restriction::SourcePort(neg, n) => {
+                out.push("--sport".into());
+                neg.push_args(out);
                 out.push(n.to_string());
             }
+            Restriction::DestinationPort(neg, n) => {
+                out.push("--dport".into());
+                neg.push_args(out);
+                out.push(n.to_string());
+            }
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! restrictions {
+    { $($exprs:tt)* } => {
+        {
+            use firewall::iptables::Restriction::*;
+            use firewall::iptables::Negatable::*;
+            use firewall::iptables::Protocol::*;
+            vec![
+                $($exprs)*
+            ]
         }
     }
 }
@@ -278,12 +345,14 @@ pub enum RuleAction<C: TablechainTrait> {
     Return,
     Drop,
     Reject,
+    Jump(C),
     Goto(C),
 }
 
 impl<C: TablechainTrait> RuleAction<C> {
     fn push_args(&self, out: &mut Vec<String>) {
         match self {
+            RuleAction::None => {}
             RuleAction::Return => {
                 out.push("-j".into());
                 out.push("RETURN".into());
@@ -296,11 +365,14 @@ impl<C: TablechainTrait> RuleAction<C> {
                 out.push("-j".into());
                 out.push("REJECT".into());
             }
-            RuleAction::Goto(c) => {
+            RuleAction::Jump(c) => {
                 out.push("-j".into());
                 out.push(c.chain_name());
             }
-            RuleAction::None => {}
+            RuleAction::Goto(c) => {
+                out.push("-g".into());
+                out.push(c.chain_name());
+            }
         }
     }
 }
