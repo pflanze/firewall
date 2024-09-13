@@ -1,14 +1,21 @@
-
 use std::process::Command;
 
-use anyhow::{Result, Context, anyhow};
+use anyhow::{anyhow, Context, Result};
 
 #[test]
 fn test_executable() -> Result<()> {
     let example_name = "main";
-    
+
     let output = Command::new("cargo")
-        .args(["run", "--quiet", "--bin", example_name, "--", "start", "--dry-run"])
+        .args([
+            "run",
+            "--quiet",
+            "--bin",
+            example_name,
+            "--",
+            "start",
+            "--dry-run",
+        ])
         .output()
         .with_context(|| anyhow!("running {example_name:?}"))?;
 
@@ -22,4 +29,3 @@ fn test_executable() -> Result<()> {
 
     Ok(())
 }
-

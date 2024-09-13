@@ -1,6 +1,8 @@
 use anyhow::{bail, Result};
 use clap::Parser;
-use firewall::iptables::{Action, Effect, Filter, IptablesWriter, RecreatingMode, Rule, RuleAction, Restriction};
+use firewall::iptables::{
+    Action, Effect, Filter, IptablesWriter, RecreatingMode, Restriction, Rule, RuleAction,
+};
 use firewall::network_interfaces::find_network_interfaces;
 
 #[derive(clap::Parser)]
@@ -17,7 +19,7 @@ struct Args {
     /// run for these specified interfaces.
     #[clap(short, long, multiple(true))]
     interfaces: Vec<String>,
-    
+
     /// 'start', 'stop', or 'restart'
     action: String,
 }
@@ -32,12 +34,11 @@ fn main() -> Result<()> {
     };
 
     let mut iptables = IptablesWriter::new(vec!["ip6tables".into()]);
-    let interfaces =
-        if args.interfaces.is_empty() {
-            find_network_interfaces()?
-        } else {
-            args.interfaces
-        };
+    let interfaces = if args.interfaces.is_empty() {
+        find_network_interfaces()?
+    } else {
+        args.interfaces
+    };
 
     let our_chain = Filter::Custom("our-chain".into());
 
@@ -48,7 +49,7 @@ fn main() -> Result<()> {
             restrictions: vec![],
             rule_action: RuleAction::None,
         },
-        RecreatingMode::Owned
+        RecreatingMode::Owned,
     )?;
 
     for chain in [Filter::INPUT, Filter::FORWARD] {
@@ -57,9 +58,9 @@ fn main() -> Result<()> {
             Rule {
                 chain: chain.clone(),
                 restrictions: vec![],
-                rule_action: RuleAction::Goto(our_chain.clone())
+                rule_action: RuleAction::Goto(our_chain.clone()),
             },
-            RecreatingMode::Owned
+            RecreatingMode::Owned,
         )?;
     }
 
@@ -72,23 +73,21 @@ fn main() -> Result<()> {
                     restrictions: vec![
                         Restriction::Interface(interface.clone()),
                         Restriction::Protocol("tcp"),
-                        Restriction::DestinationPort(port)
+                        Restriction::DestinationPort(port),
                     ],
-                    rule_action: RuleAction::Return
+                    rule_action: RuleAction::Return,
                 },
-                RecreatingMode::Owned
+                RecreatingMode::Owned,
             )?;
         }
         iptables.push(
             Action::Append,
             Rule {
                 chain: our_chain.clone(),
-                restrictions: vec![
-                    Restriction::Interface(interface.clone()),
-                ],
-                rule_action: RuleAction::Reject
+                restrictions: vec![Restriction::Interface(interface.clone())],
+                rule_action: RuleAction::Reject,
             },
-            RecreatingMode::Owned
+            RecreatingMode::Owned,
         )?;
     }
 

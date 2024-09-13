@@ -98,7 +98,7 @@ impl Action {
 pub trait TablechainTrait {
     fn chain_name(&self) -> String;
     fn table_and_chain_names(&self) -> (String, String);
-    
+
     /// For collecting the arguments for the iptables command.
     fn push_args(&self, action: Action, out: &mut Vec<String>) {
         let (table_name, chain_name) = self.table_and_chain_names();
@@ -251,7 +251,6 @@ pub enum Restriction {
     Interface(String),
     Protocol(&'static str), // ?
     DestinationPort(u16),
-    
 }
 
 impl Restriction {
@@ -273,14 +272,13 @@ impl Restriction {
     }
 }
 
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum RuleAction<C: TablechainTrait> {
     None,
     Return,
     Drop,
     Reject,
-    Goto(C)
+    Goto(C),
 }
 
 impl<C: TablechainTrait> RuleAction<C> {
@@ -311,7 +309,7 @@ impl<C: TablechainTrait> RuleAction<C> {
 pub struct Rule<C: TablechainTrait> {
     pub chain: C,
     pub restrictions: Vec<Restriction>,
-    pub rule_action: RuleAction<C>
+    pub rule_action: RuleAction<C>,
 }
 
 impl<C: TablechainTrait> Rule<C> {
@@ -369,7 +367,10 @@ impl IptablesWriter {
     /// whether the action is creative or other. You usually don't
     /// want to use this, but rather `push` instead.
     pub fn _push<T: TablechainTrait + 'static>(
-        &mut self, action: Action, rule: Rule<T>, recreating_mode: RecreatingMode
+        &mut self,
+        action: Action,
+        rule: Rule<T>,
+        recreating_mode: RecreatingMode,
     ) {
         self.actions.push((action, Box::new(rule), recreating_mode));
     }
