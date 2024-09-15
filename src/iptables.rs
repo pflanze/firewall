@@ -5,7 +5,7 @@ use std::os::unix::process::ExitStatusExt;
 use std::process::Command;
 
 use crate::command_util::CombinedString;
-use crate::with_lcstring_conversion;
+use string_enum_macro::lc_string_enum;
 
 pub fn write_str(out: &mut String, s: &str) {
     out.write_str(s).unwrap(); // can't ever fail, no?
@@ -248,19 +248,18 @@ impl TablechainEnum {
     }
 }
 
-with_lcstring_conversion! {
-    pub enum Protocol {
-        All,
-        Tcp,
-        Udp,
-        Udplite,
-        Icmp,
-        Icmpv6,
-        Esp,
-        Ah,
-        Sctp,
-        Mh
-    }
+#[lc_string_enum]
+pub enum Protocol {
+    All,
+    Tcp,
+    Udp,
+    Udplite,
+    Icmp,
+    Icmpv6,
+    Esp,
+    Ah,
+    Sctp,
+    Mh,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

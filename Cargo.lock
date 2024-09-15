@@ -128,6 +128,8 @@ dependencies = [
  "enumn",
  "ipnet",
  "nispor",
+ "string_enum",
+ "string_enum_macro",
  "strum",
  "strum_macros",
  "thiserror",
@@ -618,6 +620,18 @@ checksum = "64a4a911eed85daf18834cfaa86a79b7d266ff93ff5ba14005426219480ed662"
 dependencies = [
  "libc",
  "winapi",
+]
+
+[[package]]
+name = "string_enum"
+version = "0.1.0"
+
+[[package]]
+name = "string_enum_macro"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn 2.0.18",
 ]
 
 [[package]]

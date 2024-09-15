@@ -1,3 +1,4 @@
+workspace = { members = ["string_enum", "string_enum/string_enum_macro"] }
 [package]
 name = "firewall"
 version = "0.1.0"
@@ -23,3 +24,5 @@ strum = { version = "0.20", features = ["derive"] }
 strum_macros = { version = "0.20" }
 nispor = "=1.2.8"
 ipnet = "2.9"
+string_enum = { path = "string_enum" }
+string_enum_macro = { path = "string_enum/string_enum_macro" }
