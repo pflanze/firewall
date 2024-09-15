@@ -2,7 +2,7 @@ use proc_macro::TokenStream;
 use quote::quote;
 
 /// Define an enum with the given members, deriving `Debug, PartialEq,
-/// Eq, Clone, Copy`, and with a conversion into String that
+/// Eq, Clone`, and with a conversion into String that
 /// lower-cases the member names.
 #[proc_macro_attribute]
 pub fn lc_string_enum(atts: TokenStream, input: TokenStream) -> TokenStream {
@@ -25,7 +25,7 @@ pub fn lc_string_enum(atts: TokenStream, input: TokenStream) -> TokenStream {
                 name.to_ascii_lowercase()
             }
         }
-        #[derive(Debug, PartialEq, Eq, Clone, Copy, strum_macros::IntoStaticStr)]
+        #[derive(Debug, PartialEq, Eq, Clone, strum_macros::IntoStaticStr)]
         #ast
     };
     gen.into()

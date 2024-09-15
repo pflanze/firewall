@@ -12,6 +12,7 @@ pub fn write_str(out: &mut String, s: &str) {
 }
 
 #[lc_string_enum]
+#[derive(Copy)]
 pub enum Table {
     Filter,
     Nat,
@@ -21,6 +22,7 @@ pub enum Table {
 }
 
 #[lc_string_enum]
+#[derive(Copy)]
 pub enum Action {
     Append,
     Delete,
