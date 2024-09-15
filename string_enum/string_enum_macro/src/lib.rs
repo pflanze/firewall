@@ -3,7 +3,8 @@ use quote::quote;
 
 /// Define an enum with the given members, deriving `Debug, PartialEq,
 /// Eq, Clone`, and with a conversion into String that
-/// lower-cases the member names.
+/// lower-cases the member names. (Also available is `strum`'s
+/// `Into<&'static str>` that retains the original casing.)
 #[proc_macro_attribute]
 pub fn lc_string_enum(atts: TokenStream, input: TokenStream) -> TokenStream {
     if !atts.is_empty() {
@@ -31,4 +32,27 @@ pub fn lc_string_enum(atts: TokenStream, input: TokenStream) -> TokenStream {
     gen.into()
 }
 
+/// Define an enum with the given members, deriving `Debug, PartialEq,
+/// Eq, Clone`, and with a conversion into String that keeps the
+/// original casing of the member names. (Also available is `strum`'s
+/// `Into<&'static str>` that retains the original casing.)
+#[proc_macro_attribute]
+pub fn uc_string_enum(atts: TokenStream, input: TokenStream) -> TokenStream {
+    if !atts.is_empty() {
+        panic!("uc_string_enum does not expect any attribute arguments (got: {atts})");
+    }
+    let ast: syn::DeriveInput = syn::parse(input).expect("can't parse as Rust code");
 
+    let name = &ast.ident;
+    let gen = quote! {
+        impl From<&#name> for String {
+            fn from(value: &#name) -> Self {
+                let name: &'static str = value.into();
+                name.to_ascii_uppercase()
+            }
+        }
+        #[derive(Debug, PartialEq, Eq, Clone, strum_macros::IntoStaticStr)]
+        #ast
+    };
+    gen.into()
+}

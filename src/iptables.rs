@@ -5,7 +5,7 @@ use std::os::unix::process::ExitStatusExt;
 use std::process::Command;
 
 use crate::command_util::CombinedString;
-use string_enum_macro::lc_string_enum;
+use string_enum_macro::{lc_string_enum, uc_string_enum};
 
 pub fn write_str(out: &mut String, s: &str) {
     out.write_str(s).unwrap(); // can't ever fail, no?
@@ -113,16 +113,7 @@ macro_rules! def_chain {
     }
 }
 
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    // enumn::N, PartialOrd, Ord,
-    strum::EnumCount,
-    strum::EnumString,
-    strum::IntoStaticStr,
-)]
+#[uc_string_enum]
 pub enum Filter {
     INPUT,
     FORWARD,
@@ -131,16 +122,7 @@ pub enum Filter {
 }
 def_chain!(Filter);
 
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    // enumn::N, PartialOrd, Ord,
-    strum::EnumCount,
-    strum::EnumString,
-    strum::IntoStaticStr,
-)]
+#[uc_string_enum]
 pub enum Nat {
     PREROUTING,
     INPUT,
@@ -150,16 +132,7 @@ pub enum Nat {
 }
 def_chain!(Nat);
 
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    // enumn::N, PartialOrd, Ord,
-    strum::EnumCount,
-    strum::EnumString,
-    strum::IntoStaticStr,
-)]
+#[uc_string_enum]
 pub enum Mangle {
     PREROUTING,
     INPUT,
@@ -170,16 +143,7 @@ pub enum Mangle {
 }
 def_chain!(Mangle);
 
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    // enumn::N, PartialOrd, Ord,
-    strum::EnumCount,
-    strum::EnumString,
-    strum::IntoStaticStr,
-)]
+#[uc_string_enum]
 pub enum Raw {
     PREROUTING,
     OUTPUT,
@@ -187,16 +151,7 @@ pub enum Raw {
 }
 def_chain!(Raw);
 
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    // enumn::N, PartialOrd, Ord,
-    strum::EnumCount,
-    strum::EnumString,
-    strum::IntoStaticStr,
-)]
+#[uc_string_enum]
 pub enum Security {
     INPUT,
     OUTPUT,
