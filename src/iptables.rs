@@ -11,41 +11,16 @@ pub fn write_str(out: &mut String, s: &str) {
     out.write_str(s).unwrap(); // can't ever fail, no?
 }
 
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    // enumn::N, PartialOrd, Ord,
-    strum::EnumCount,
-    strum::EnumString,
-    strum::IntoStaticStr,
-)]
+#[lc_string_enum]
 pub enum Table {
-    #[strum(serialize = "filter")]
     Filter,
-    #[strum(serialize = "nat")]
     Nat,
-    #[strum(serialize = "mangle")]
     Mangle,
-    #[strum(serialize = "raw")]
     Raw,
-    #[strum(serialize = "security")]
     Security,
 }
 
-#[derive(
-    Debug,
-    PartialEq,
-    Eq,
-    Clone,
-    Copy,
-    // enumn::N, PartialOrd, Ord,
-    strum::EnumCount,
-    strum::EnumString,
-    strum::IntoStaticStr,
-)]
+#[lc_string_enum]
 pub enum Action {
     Append,
     Delete,
@@ -56,6 +31,7 @@ pub enum Action {
     DeleteChain,
     Flush,
 }
+
 impl Action {
     /// For collecting the arguments for the iptables command.
     pub fn push_args(&self, chain_name: String, out: &mut Vec<String>) {
