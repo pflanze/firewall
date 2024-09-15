@@ -88,6 +88,7 @@ pub trait TablechainTrait {
     }
 }
 
+// TODO: find out how to implement the same without using a macro.
 macro_rules! def_chain {
     { $typename:tt } => {
         impl TablechainTrait for $typename {
