@@ -28,60 +28,68 @@ struct Args {
     action: String,
 }
 
-fn example(interfaces: Vec<String>) -> Result<IptablesWriter> {
+fn example(interfaces: Vec<String>) -> IptablesWriter {
     let mut iptables = IptablesWriter::new(vec!["ip6tables".into()]);
     let our_chain = Filter::Custom("our-chain".into());
 
-    iptables.push(
-        Action::NewChain,
-        Rule {
-            chain: our_chain.clone(),
-            restrictions: vec![],
-            rule_action: RuleAction::None,
-        },
-        RecreatingMode::Owned,
-    )?;
-
-    for chain in [Filter::INPUT, Filter::FORWARD] {
-        iptables.push(
-            Action::Insert(1),
+    iptables
+        .push(
+            Action::NewChain,
             Rule {
-                chain: chain.clone(),
+                chain: our_chain.clone(),
                 restrictions: vec![],
-                rule_action: RuleAction::Jump(our_chain.clone()),
+                rule_action: RuleAction::None,
             },
             RecreatingMode::Owned,
-        )?;
+        )
+        .unwrap();
+
+    for chain in [Filter::INPUT, Filter::FORWARD] {
+        iptables
+            .push(
+                Action::Insert(1),
+                Rule {
+                    chain: chain.clone(),
+                    restrictions: vec![],
+                    rule_action: RuleAction::Jump(our_chain.clone()),
+                },
+                RecreatingMode::Owned,
+            )
+            .unwrap();
     }
 
     for interface in interfaces {
         for port in [22, 80, 9080] {
-            iptables.push(
+            iptables
+                .push(
+                    Action::Append,
+                    Rule {
+                        chain: our_chain.clone(),
+                        restrictions: restrictions![
+                            Interface(Is, interface.clone()),
+                            Protocol(Is, Tcp),
+                            DestinationPort(Is, port),
+                        ],
+                        rule_action: RuleAction::Return,
+                    },
+                    RecreatingMode::Owned,
+                )
+                .unwrap();
+        }
+        iptables
+            .push(
                 Action::Append,
                 Rule {
                     chain: our_chain.clone(),
-                    restrictions: restrictions![
-                        Interface(Is, interface.clone()),
-                        Protocol(Is, Tcp),
-                        DestinationPort(Is, port),
-                    ],
-                    rule_action: RuleAction::Return,
+                    restrictions: restrictions![Interface(Is, interface.clone()),],
+                    rule_action: RuleAction::Reject,
                 },
                 RecreatingMode::Owned,
-            )?;
-        }
-        iptables.push(
-            Action::Append,
-            Rule {
-                chain: our_chain.clone(),
-                restrictions: restrictions![Interface(Is, interface.clone()),],
-                rule_action: RuleAction::Reject,
-            },
-            RecreatingMode::Owned,
-        )?;
+            )
+            .unwrap();
     }
 
-    Ok(iptables)
+    iptables
 }
 
 fn main() -> Result<()> {
@@ -106,5 +114,5 @@ fn main() -> Result<()> {
     };
     let verbose = args.dry_run || args.verbose;
     let verbose_output = if verbose { Some(stderr()) } else { None };
-    example(interfaces)?.execute(want, verbose_output, &mut *executor)
+    example(interfaces).execute(want, verbose_output, &mut *executor)
 }
