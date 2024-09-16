@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use clap::Parser;
 use firewall::executor::{DryExecutor, Executor, ExecutorResult, ExecutorStatus, RealExecutor};
 use firewall::iptables::{
-    Action, Effect, Filter, IptablesWriter, RecreatingMode, Rule, RuleAction,
+    Action, AnyAction, Effect, Filter, IptablesWriter, RecreatingMode, Rule, RuleAction,
 };
 use firewall::network_interfaces::find_network_interfaces;
 use firewall::restrictions;
@@ -32,61 +32,53 @@ fn example(interfaces: Vec<String>) -> IptablesWriter {
     let mut iptables = IptablesWriter::new(vec!["ip6tables".into()]);
     let our_chain = Filter::Custom("our-chain".into());
 
-    iptables
-        .push(
-            Action::NewChain,
+    iptables.push(
+        Action::NewChain,
+        Rule {
+            chain: our_chain.clone(),
+            restrictions: vec![],
+            rule_action: RuleAction::None,
+        },
+        RecreatingMode::Owned,
+    );
+
+    for chain in [Filter::INPUT, Filter::FORWARD] {
+        iptables.push(
+            Action::Insert(1),
             Rule {
-                chain: our_chain.clone(),
+                chain: chain.clone(),
                 restrictions: vec![],
-                rule_action: RuleAction::None,
+                rule_action: RuleAction::Jump(our_chain.clone()),
             },
             RecreatingMode::Owned,
         )
-        .unwrap();
-
-    for chain in [Filter::INPUT, Filter::FORWARD] {
-        iptables
-            .push(
-                Action::Insert(1),
-                Rule {
-                    chain: chain.clone(),
-                    restrictions: vec![],
-                    rule_action: RuleAction::Jump(our_chain.clone()),
-                },
-                RecreatingMode::Owned,
-            )
-            .unwrap();
     }
 
     for interface in interfaces {
         for port in [22, 80, 9080] {
-            iptables
-                .push(
-                    Action::Append,
-                    Rule {
-                        chain: our_chain.clone(),
-                        restrictions: restrictions![
-                            Interface(Is, interface.clone()),
-                            Protocol(Is, Tcp),
-                            DestinationPort(Is, port),
-                        ],
-                        rule_action: RuleAction::Return,
-                    },
-                    RecreatingMode::Owned,
-                )
-                .unwrap();
-        }
-        iptables
-            .push(
+            iptables.push(
                 Action::Append,
                 Rule {
                     chain: our_chain.clone(),
-                    restrictions: restrictions![Interface(Is, interface.clone()),],
-                    rule_action: RuleAction::Reject,
+                    restrictions: restrictions![
+                        Interface(Is, interface.clone()),
+                        Protocol(Is, Tcp),
+                        DestinationPort(Is, port),
+                    ],
+                    rule_action: RuleAction::Return,
                 },
                 RecreatingMode::Owned,
             )
-            .unwrap();
+        }
+        iptables.push(
+            Action::Append,
+            Rule {
+                chain: our_chain.clone(),
+                restrictions: restrictions![Interface(Is, interface.clone()),],
+                rule_action: RuleAction::Reject,
+            },
+            RecreatingMode::Owned,
+        )
     }
 
     iptables
@@ -107,7 +99,7 @@ fn main() -> Result<()> {
         args.interfaces
     };
 
-    let mut executor: Box<dyn Executor<Action>> = if args.dry_run {
+    let mut executor: Box<dyn Executor<AnyAction>> = if args.dry_run {
         Box::new(DryExecutor)
     } else {
         Box::new(RealExecutor)
@@ -122,8 +114,8 @@ fn main() -> Result<()> {
 
 struct MockExecutor(Vec<(&'static str, ExecutorStatus, String)>);
 
-impl Executor<Action> for MockExecutor {
-    fn execute<'t>(&mut self, _action: Action, cmd: &'t [String]) -> ExecutorResult<'t> {
+impl Executor<AnyAction> for MockExecutor {
+    fn execute<'t>(&mut self, _action: AnyAction, cmd: &'t [String]) -> ExecutorResult<'t> {
         for (arg, status, output) in &self.0 {
             if cmd.contains(&String::from(*arg)) {
                 return ExecutorResult {

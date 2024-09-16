@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::Result;
 use ipnet::Ipv4Net;
 use std::fmt::Debug;
 
@@ -20,13 +20,36 @@ pub enum Table {
 #[derive(Copy)]
 pub enum Action {
     Append,
-    Delete,
     /// Insert is holding a 1-based index
     Insert(u32),
-    Check,
     NewChain,
+}
+
+impl From<Action> for AnyAction {
+    fn from(value: Action) -> Self {
+        AnyAction::Creation(value)
+    }
+}
+
+#[lc_string_enum]
+#[derive(Copy)]
+pub enum DeletionAction {
+    Delete,
     DeleteChain,
     Flush,
+}
+
+impl From<DeletionAction> for AnyAction {
+    fn from(value: DeletionAction) -> Self {
+        AnyAction::Deletion(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnyAction {
+    Check,
+    Creation(Action),
+    Deletion(DeletionAction),
 }
 
 impl Action {
@@ -38,35 +61,60 @@ impl Action {
         };
         match self {
             Action::Append => normal("-A"),
-            Action::Delete => normal("-D"),
             Action::Insert(n) => {
                 normal("-I");
                 out.push(format!("{n}"));
             }
-            Action::Check => normal("-C"),
             Action::NewChain => normal("-N"),
-            Action::DeleteChain => normal("-X"),
-            Action::Flush => normal("-F"),
         }
     }
 
     /// The sequence of actions that are *removing* the original
-    /// action. `None` if the action is not one that creates
-    /// something.
-    pub fn deletion_sequence(&self) -> Option<&[Action]> {
+    /// action.
+    pub fn deletion_sequence(&self) -> &[DeletionAction] {
         match self {
-            Action::Append => Some(&[Action::Delete]),
-            Action::Delete => None,
-            Action::Insert(_) => Some(&[Action::Delete]),
-            Action::Check => None,
-            Action::NewChain => Some(&[Action::Flush, Action::DeleteChain]),
-            Action::DeleteChain => None,
-            Action::Flush => None,
+            Action::Append => &[DeletionAction::Delete],
+            Action::Insert(_) => &[DeletionAction::Delete],
+            Action::NewChain => &[DeletionAction::Flush, DeletionAction::DeleteChain],
+        }
+    }
+}
+
+impl DeletionAction {
+    /// For collecting the arguments for the iptables command.
+    pub fn push_args(&self, chain_name: String, out: &mut Vec<String>) {
+        let normal = |name: &str| {
+            out.push(name.into());
+            out.push(chain_name);
+        };
+        match self {
+            DeletionAction::Delete => normal("-D"),
+            DeletionAction::DeleteChain => normal("-X"),
+            DeletionAction::Flush => normal("-F"),
+        }
+    }
+}
+
+impl AnyAction {
+    /// For collecting the arguments for the iptables command.
+    pub fn push_args(&self, chain_name: String, out: &mut Vec<String>) {
+        let mut normal = |name: &str| {
+            out.push(name.into());
+            out.push(chain_name.clone());
+        };
+        match self {
+            AnyAction::Check => normal("-C"),
+            AnyAction::Creation(a) => a.push_args(chain_name, out),
+            AnyAction::Deletion(a) => a.push_args(chain_name, out),
         }
     }
 
-    pub fn is_creation(&self) -> bool {
-        self.deletion_sequence().is_some()
+    fn is_creation(&self) -> bool {
+        match self {
+            AnyAction::Check => false,
+            AnyAction::Creation(_) => true,
+            AnyAction::Deletion(_) => false,
+        }
     }
 }
 
@@ -75,7 +123,7 @@ pub trait TablechainTrait {
     fn table_and_chain_names(&self) -> (String, String);
 
     /// For collecting the arguments for the iptables command.
-    fn push_args(&self, action: Action, out: &mut Vec<String>) {
+    fn push_args(&self, action: AnyAction, out: &mut Vec<String>) {
         let (table_name, chain_name) = self.table_and_chain_names();
         out.push("-t".into());
         out.push(table_name.into());
@@ -313,7 +361,7 @@ pub struct Rule<C: TablechainTrait> {
 }
 
 impl<C: TablechainTrait> Rule<C> {
-    pub fn cmd_args(&self, action: Action) -> Vec<String> {
+    pub fn cmd_args(&self, action: AnyAction) -> Vec<String> {
         let mut out = Vec::new();
         self.chain.push_args(action, &mut out);
         for r in &self.restrictions {
@@ -325,11 +373,11 @@ impl<C: TablechainTrait> Rule<C> {
 }
 
 pub trait RuleTrait {
-    fn cmd_args(&self, action: Action) -> Vec<String>;
+    fn cmd_args(&self, action: AnyAction) -> Vec<String>;
 }
 
 impl<C: TablechainTrait> RuleTrait for Rule<C> {
-    fn cmd_args(&self, action: Action) -> Vec<String> {
+    fn cmd_args(&self, action: AnyAction) -> Vec<String> {
         self.cmd_args(action)
     }
 }
@@ -381,7 +429,7 @@ impl<'t> From<&ExecutorResult<'t>> for ResultInterpretation {
 
 pub struct IptablesWriter {
     iptables_cmd: Vec<String>,
-    actions: Vec<(Action, Box<dyn RuleTrait>, RecreatingMode)>,
+    actions: Vec<(AnyAction, Box<dyn RuleTrait>, RecreatingMode)>,
 }
 
 /// What end result you want: Deletion inverts the result of an
@@ -413,32 +461,26 @@ impl IptablesWriter {
     /// want to use this, but rather `push` instead.
     pub fn _push<T: TablechainTrait + 'static>(
         &mut self,
-        action: Action,
+        action: AnyAction,
         rule: Rule<T>,
         recreating_mode: RecreatingMode,
     ) {
         self.actions.push((action, Box::new(rule), recreating_mode));
     }
 
-    /// Pushes the rule, but accepts only creative actions. Because
-    /// deleting actions are usually done via running `execute` with
-    /// an Effect that deletes (including recreation), they are
-    /// automatically derived there. Also, deleting `Effect`s lead to
-    /// the reversal of the order of rule application; hence call
-    /// `push` always in the order appropriate for the creation of
-    /// rules.
+    /// Push a rule with creative action. Because deleting actions are
+    /// usually done via running `execute` with an Effect that deletes
+    /// (including recreation), they are automatically derived
+    /// there. Also, deleting `Effect`s lead to the reversal of the
+    /// order of rule application; hence call `push` always in the
+    /// order appropriate for the creation of rules.
     pub fn push<T: TablechainTrait + 'static>(
         &mut self,
         action: Action,
         rule: Rule<T>,
         recreating_mode: RecreatingMode,
-    ) -> Result<()> {
-        if action.is_creation() {
-            self._push(action, rule, recreating_mode);
-            Ok(())
-        } else {
-            bail!("push called for an action that doesn't create anything: {action:?}")
-        }
+    ) {
+        self._push(action.into(), rule, recreating_mode);
     }
 
     /// For a dry_run; don't use as shell code, use execute (that can
@@ -463,7 +505,7 @@ impl IptablesWriter {
         &self,
         want: Effect,
         mut verbose_output: Option<O>,
-        executor: &mut dyn Executor<Action>,
+        executor: &mut dyn Executor<AnyAction>,
     ) -> Result<()> {
         let mut run = |creation: bool| -> Result<()> {
             let actions: Box<dyn Iterator<Item = _>> = if creation {
@@ -481,20 +523,28 @@ impl IptablesWriter {
                         }
                     }
                 }
-                let _actions = &[*action];
-                let actions = if creation {
-                    _actions
-                } else {
-                    action.deletion_sequence().expect(
+                let creation_action = match action {
+                    AnyAction::Creation(a) => a,
+                    _ => panic!(
                         "should not have non-creating actions when using deleting \
                                  `Effect`s, apparently you used `_push`?",
-                    )
+                    ),
+                };
+                let actions = if creation {
+                    vec![*action]
+                } else {
+                    creation_action
+                        .deletion_sequence()
+                        .iter()
+                        .copied()
+                        .map(AnyAction::from)
+                        .collect()
                 };
                 for action in actions {
                     let mut cmd = self.iptables_cmd.clone();
-                    let mut args = rule.cmd_args(*action);
+                    let mut args = rule.cmd_args(action);
                     cmd.append(&mut args);
-                    let result = executor.execute(*action, &cmd);
+                    let result = executor.execute(action, &cmd);
                     if let Some(out) = verbose_output.as_mut() {
                         writeln!(out, "{} {}", result.to_str(), shell_quote_many(&cmd))?;
                     }
@@ -518,7 +568,7 @@ impl IptablesWriter {
                             }
                         }
                         ResultInterpretation::ChainAlreadyExists => {
-                            if *action == Action::NewChain {
+                            if action == Action::NewChain.into() {
                                 // Only ignore this error if
                                 // previously there was the ChainInUse
                                 // error above on the same rule?
