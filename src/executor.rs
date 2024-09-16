@@ -9,11 +9,12 @@ use anyhow::bail;
 use crate::command_util::CombinedString;
 use crate::shell_quote::shell_quote_many;
 
+#[derive(Debug, Clone)]
 pub enum ExecutorStatus {
     Success,
     ExitCode(i32),
     Signal(i32),
-    ExecFailure(std::io::Error),
+    ExecFailure(String),
 }
 
 pub struct ExecutorResult<'t> {
@@ -112,7 +113,7 @@ impl<C> Executor<C> for RealExecutor {
             }
             Err(e) => ExecutorResult {
                 cmd,
-                status: ExecutorStatus::ExecFailure(e),
+                status: ExecutorStatus::ExecFailure(e.to_string()),
                 combined_output: "".into(),
             },
         }
