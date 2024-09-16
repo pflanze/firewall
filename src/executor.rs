@@ -16,6 +16,16 @@ pub enum ExecutorStatus {
     Signal(i32),
     ExecFailure(String),
 }
+impl ExecutorStatus {
+    pub fn to_str(&self) -> &str {
+        match self {
+            ExecutorStatus::Success => "+",
+            ExecutorStatus::ExitCode(_) => "E",
+            ExecutorStatus::Signal(_) => "S",
+            ExecutorStatus::ExecFailure(_) => "X",
+        }
+    }
+}
 
 pub struct ExecutorResult<'t> {
     pub cmd: &'t [String],
@@ -23,6 +33,9 @@ pub struct ExecutorResult<'t> {
     pub combined_output: String,
 }
 impl<'t> ExecutorResult<'t> {
+    pub fn to_str(&self) -> &str {
+        self.status.to_str()
+    }
     pub fn to_anyhow(&self, msg: Option<&str>) -> anyhow::Result<()> {
         let _msg = if let Some(msg) = msg {
             let mut s = String::from(" ");

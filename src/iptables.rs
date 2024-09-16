@@ -462,7 +462,9 @@ impl IptablesWriter {
                     cmd.append(&mut args);
                     let result = executor.execute(*action, &cmd);
                     if verbose {
-                        eprintln!("+ {}", shell_quote_many(&cmd));
+                        eprintln!("{} {}",
+                                  result.to_str(),
+                                  shell_quote_many(&cmd));
                     }
                     if !result.is_success() {
                         match result.code() {
