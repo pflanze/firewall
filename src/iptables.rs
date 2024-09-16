@@ -2,7 +2,7 @@ use anyhow::{bail, Result};
 use ipnet::Ipv4Net;
 use std::fmt::Debug;
 
-use crate::executor::Executor;
+use crate::executor::{Executor, ExecutorResult, ExecutorStatus};
 use crate::shell_quote::shell_quote_many;
 use string_enum_macro::{lc_string_enum, uc_string_enum};
 
@@ -334,6 +334,46 @@ impl<C: TablechainTrait> RuleTrait for Rule<C> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResultInterpretation {
+    /// Undoubtable success.
+    Ok,
+    /// Error that happens when a rule that should be deleted doesn't
+    /// exist.
+    OkForDeletions,
+    /// A chain couldn't be deleted because it is in use
+    ChainInUse,
+    /// Unrecoverable error
+    Err,
+}
+
+impl<'t> From<&ExecutorResult<'t>> for ResultInterpretation {
+    fn from(result: &ExecutorResult<'t>) -> Self {
+        match result.status {
+            ExecutorStatus::Success => Self::Ok,
+            ExecutorStatus::ExitCode(code) => {
+                // It appears that iptables exits with code 1 *or* 2 when
+                // chain doesn't exist, 1 for rule that doesn't exist, 4 when
+                // not running as root or when "Device or resource busy"
+                // because a chain, while empty, is still referenced.
+                if code == 1 || code == 2 {
+                    Self::OkForDeletions
+                } else if code == 4
+                    && result
+                        .combined_output
+                        .contains(" CHAIN_DEL failed (Device or resource busy) ")
+                {
+                    Self::ChainInUse
+                } else {
+                    Self::Err
+                }
+            }
+            ExecutorStatus::Signal(_) => Self::Err,
+            ExecutorStatus::ExecFailure(_) => Self::Err,
+        }
+    }
+}
+
 pub struct IptablesWriter {
     iptables_cmd: Vec<String>,
     actions: Vec<(Action, Box<dyn RuleTrait>, RecreatingMode)>,
@@ -411,14 +451,6 @@ impl IptablesWriter {
         out
     }
 
-    fn exitcode_is_ok_for_deletions(code: i32) -> bool {
-        // It appears that iptables exits with code 1 *or* 2 when
-        // chain doesn't exist, 1 for rule that doesn't exist, 4 when
-        // not running as root or when "Device or resource busy"
-        // because a chain, while empty, is still referenced.
-        code == 1 || code == 2
-    }
-
     /// Turn the pushed rules into rules for actual execution
     /// according to the wanted Effect. Execute for real if true is
     /// given.
@@ -461,22 +493,25 @@ impl IptablesWriter {
                     if let Some(out) = verbose_output.as_mut() {
                         writeln!(out, "{} {}", result.to_str(), shell_quote_many(&cmd))?;
                     }
-                    if !result.is_success() {
-                        match result.code() {
-                            Some(code) if Self::exitcode_is_ok_for_deletions(code) => {
-                                if !action.is_creation() {
-                                    ()
-                                } else {
-                                    match recreating_mode {
-                                        RecreatingMode::Owned => result.to_anyhow(Some(
-                                            &format!("for non-deleting action {action:?}"),
-                                        ))?,
-                                        RecreatingMode::TryCreationNoDeletion => (),
-                                    }
-                                }
+                    match ResultInterpretation::from(&result) {
+                        ResultInterpretation::Ok => (),
+                        ResultInterpretation::OkForDeletions => {
+                            if action.is_creation() {
+                                result.to_anyhow(Some(&format!(
+                                    "for non-deleting action {action:?}"
+                                )))?
                             }
-                            _ => result.to_anyhow(None)?,
                         }
+                        ResultInterpretation::ChainInUse => {
+                            if action.is_creation() {
+                                result.to_anyhow(Some(&format!(
+                                    "because chain is in use, for non-deleting action {action:?}"
+                                )))?
+                            } else {
+                                // XX todo: Mark so that error in creation part will be OK.
+                            }
+                        }
+                        ResultInterpretation::Err => result.to_anyhow(None)?,
                     }
                 }
             }
