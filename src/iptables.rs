@@ -392,10 +392,7 @@ impl IptablesWriter {
             self._push(action, rule, recreating_mode);
             Ok(())
         } else {
-            bail!(
-                "warning: push_wanting called for an action that doesn't \
-                 create anything: {action:?}"
-            )
+            bail!("push called for an action that doesn't create anything: {action:?}")
         }
     }
 
