@@ -2,7 +2,7 @@ use std::io::stderr;
 
 use anyhow::{bail, Result};
 use clap::Parser;
-use firewall::executor::{DryExecutor, Executor, RealExecutor};
+use firewall::executor::{DryExecutor, Executor, ExecutorResult, ExecutorStatus, RealExecutor};
 use firewall::iptables::{
     Action, Effect, Filter, IptablesWriter, RecreatingMode, Rule, RuleAction,
 };
@@ -115,4 +115,79 @@ fn main() -> Result<()> {
     let verbose = args.dry_run || args.verbose;
     let verbose_output = if verbose { Some(stderr()) } else { None };
     example(interfaces).execute(want, verbose_output, &mut *executor)
+}
+
+// =============================================================================
+// Tests that want to be based on the above `example` rules:
+
+struct MockExecutor(Vec<(&'static str, ExecutorStatus, String)>);
+
+impl Executor<Action> for MockExecutor {
+    fn execute<'t>(&mut self, _action: Action, cmd: &'t [String]) -> ExecutorResult<'t> {
+        for (arg, status, output) in &self.0 {
+            if cmd.contains(&String::from(*arg)) {
+                return ExecutorResult {
+                    cmd,
+                    status: status.clone(),
+                    combined_output: output.clone(),
+                };
+            }
+        }
+        ExecutorResult {
+            cmd,
+            status: ExecutorStatus::Success,
+            combined_output: "".into(),
+        }
+    }
+}
+
+#[test]
+fn verify_error_mode() {
+    use indoc::indoc;
+
+    let run = |mut executor: MockExecutor| -> Result<String> {
+        let iptables = example(vec!["eth42".into()]);
+        let mut output = Vec::new();
+        iptables.execute(Effect::Recreation, Some(&mut output), &mut executor)?;
+        Ok(String::from_utf8(output).unwrap())
+    };
+
+    assert_eq!(
+        run(MockExecutor(vec![
+            // code 1 would happen if the chain didn't exist (OK, -F
+            // should also fail, then)
+            ("-X", ExecutorStatus::ExitCode(1), "".into()),
+        ]))
+        .unwrap(),
+        indoc! {"
+            + ip6tables -t filter -D our-chain -i eth42 -j REJECT
+            + ip6tables -t filter -D our-chain -i eth42 -p tcp --dport 9080 -j RETURN
+            + ip6tables -t filter -D our-chain -i eth42 -p tcp --dport 80 -j RETURN
+            + ip6tables -t filter -D our-chain -i eth42 -p tcp --dport 22 -j RETURN
+            + ip6tables -t filter -D FORWARD -j our-chain
+            + ip6tables -t filter -D INPUT -j our-chain
+            + ip6tables -t filter -F our-chain
+            E ip6tables -t filter -X our-chain
+            + ip6tables -t filter -N our-chain
+            + ip6tables -t filter -I INPUT 1 -j our-chain
+            + ip6tables -t filter -I FORWARD 1 -j our-chain
+            + ip6tables -t filter -A our-chain -i eth42 -p tcp --dport 22 -j RETURN
+            + ip6tables -t filter -A our-chain -i eth42 -p tcp --dport 80 -j RETURN
+            + ip6tables -t filter -A our-chain -i eth42 -p tcp --dport 9080 -j RETURN
+            + ip6tables -t filter -A our-chain -i eth42 -j REJECT
+        "}
+    );
+
+    assert_eq!(
+        run(MockExecutor(vec![
+            // code 4 happens if the chain can't be removed because it
+            // is still "in use", but in this case iptables also
+            // prints a message saying so. We're not giving that
+            // message so we expect an error.
+            ("-X", ExecutorStatus::ExitCode(4), "".into()),
+        ]))
+        .unwrap_err()
+        .to_string(),
+        "command `ip6tables -t filter -X our-chain` exited with code 4: "
+    );
 }
