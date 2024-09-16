@@ -1,5 +1,6 @@
 use anyhow::{bail, Result};
 use clap::Parser;
+use firewall::executor::{DryExecutor, Executor, RealExecutor};
 use firewall::iptables::{
     Action, Effect, Filter, IptablesWriter, RecreatingMode, Rule, RuleAction,
 };
@@ -92,6 +93,10 @@ fn main() -> Result<()> {
         )?;
     }
 
-    // println!("{}", writer.to_string());
-    iptables.execute(want, args.dry_run || args.verbose, !args.dry_run)
+    let mut executor: Box<dyn Executor> = if args.dry_run {
+        Box::new(DryExecutor)
+    } else {
+        Box::new(RealExecutor)
+    };
+    iptables.execute(want, args.dry_run || args.verbose, &mut *executor)
 }

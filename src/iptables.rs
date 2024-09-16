@@ -1,10 +1,9 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use ipnet::Ipv4Net;
 use std::fmt::Debug;
-use std::os::unix::process::ExitStatusExt;
-use std::process::Command;
 
-use crate::command_util::CombinedString;
+use crate::executor::Executor;
+use crate::shell_quote::shell_quote_many;
 use string_enum_macro::{lc_string_enum, uc_string_enum};
 
 #[lc_string_enum]
@@ -426,14 +425,8 @@ impl IptablesWriter {
     /// Turn the pushed rules into rules for actual execution
     /// according to the wanted Effect. Execute for real if true is
     /// given.
-    pub fn execute(&self, want: Effect, verbose: bool, for_real: bool) -> Result<()> {
-        let mut cmd = self.iptables_cmd.clone().into_iter();
-        let command_path = cmd
-            .next()
-            .ok_or_else(|| anyhow!("iptables_cmd value is empty"))?;
-        let command_base_args: Vec<String> = cmd.collect();
-
-        let run = |creation: bool| -> Result<()> {
+    pub fn execute(&self, want: Effect, verbose: bool, executor: &mut dyn Executor) -> Result<()> {
+        let mut run = |creation: bool| -> Result<()> {
             let actions: Box<dyn Iterator<Item = _>> = if creation {
                 Box::new(self.actions.iter())
             } else {
@@ -459,42 +452,42 @@ impl IptablesWriter {
                     )
                 };
                 for action in actions {
+                    let mut cmd = self.iptables_cmd.clone();
                     let mut args = rule.cmd_args(*action);
-                    let mut all_args = command_base_args.clone();
-                    all_args.append(&mut args);
-                    let mut command = Command::new(command_path.clone());
-                    command.args(&all_args);
+                    cmd.append(&mut args);
+                    let result = executor.execute(&cmd);
                     if verbose {
-                        eprintln!("+ {command:?}");
+                        eprintln!("+ {}", shell_quote_many(&cmd));
                     }
-                    if for_real {
-                        let output = command.output()?;
-                        let status = output.status;
-                        if !status.success() {
-                            match status.code() {
-                                Some(code) if Self::exitcode_is_ok_for_deletions(code) => {
-                                    if !action.is_creation() {
-                                        ()
-                                    } else {
-                                        match recreating_mode {
-                                            RecreatingMode::Owned => bail!(
-                                                "command {command:?} exited with code {code} \
+                    if !result.is_success() {
+                        match result.code() {
+                            Some(code) if Self::exitcode_is_ok_for_deletions(code) => {
+                                if !action.is_creation() {
+                                    ()
+                                } else {
+                                    match recreating_mode {
+                                        RecreatingMode::Owned => bail!(
+                                            "command `{}` exited with code {code} \
                                              for non-deleting action {action:?}: {}",
-                                                output.combined_string()
-                                            ),
-                                            RecreatingMode::TryCreationNoDeletion => {}
-                                        }
+                                            shell_quote_many(&cmd),
+                                            result.combined_output
+                                        ),
+                                        RecreatingMode::TryCreationNoDeletion => {}
                                     }
                                 }
-                                Some(code) => bail!(
-                                    "command {command:?} exited with code {code}: {}",
-                                    output.combined_string()
-                                ),
-                                None => bail!(
-                                    "command {command:?} was killed by signal {:?}",
-                                    status.signal()
-                                ),
                             }
+                            Some(code) => {
+                                bail!(
+                                    "command `{}` exited with code {code}: {}",
+                                    shell_quote_many(&cmd),
+                                    result.combined_output
+                                )
+                            }
+                            None => bail!(
+                                "command `{}` was killed by signal {:?}",
+                                shell_quote_many(&cmd),
+                                result.signal()
+                            ),
                         }
                     }
                 }
