@@ -3,7 +3,7 @@ use std::process::Command;
 use anyhow::{anyhow, Context, Result};
 
 #[test]
-fn test_executable() -> Result<()> {
+fn verify_verbose_output() -> Result<()> {
     let example_name = "main";
 
     let output = Command::new("cargo")
