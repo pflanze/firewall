@@ -425,10 +425,10 @@ impl IptablesWriter {
     /// Turn the pushed rules into rules for actual execution
     /// according to the wanted Effect. Execute for real if true is
     /// given.
-    pub fn execute(
+    pub fn execute<O: std::io::Write>(
         &self,
         want: Effect,
-        verbose: bool,
+        mut verbose_output: Option<O>,
         executor: &mut dyn Executor<Action>,
     ) -> Result<()> {
         let mut run = |creation: bool| -> Result<()> {
@@ -461,10 +461,8 @@ impl IptablesWriter {
                     let mut args = rule.cmd_args(*action);
                     cmd.append(&mut args);
                     let result = executor.execute(*action, &cmd);
-                    if verbose {
-                        eprintln!("{} {}",
-                                  result.to_str(),
-                                  shell_quote_many(&cmd));
+                    if let Some(out) = verbose_output.as_mut() {
+                        writeln!(out, "{} {}", result.to_str(), shell_quote_many(&cmd))?;
                     }
                     if !result.is_success() {
                         match result.code() {

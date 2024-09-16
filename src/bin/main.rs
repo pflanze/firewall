@@ -1,3 +1,5 @@
+use std::io::stderr;
+
 use anyhow::{bail, Result};
 use clap::Parser;
 use firewall::executor::{DryExecutor, Executor, RealExecutor};
@@ -98,5 +100,7 @@ fn main() -> Result<()> {
     } else {
         Box::new(RealExecutor)
     };
-    iptables.execute(want, args.dry_run || args.verbose, &mut *executor)
+    let verbose = args.dry_run || args.verbose;
+    let verbose_output = if verbose { Some(stderr()) } else { None };
+    iptables.execute(want, verbose_output, &mut *executor)
 }
