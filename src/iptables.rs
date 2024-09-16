@@ -466,28 +466,14 @@ impl IptablesWriter {
                                     ()
                                 } else {
                                     match recreating_mode {
-                                        RecreatingMode::Owned => bail!(
-                                            "command `{}` exited with code {code} \
-                                             for non-deleting action {action:?}: {}",
-                                            shell_quote_many(&cmd),
-                                            result.combined_output
-                                        ),
-                                        RecreatingMode::TryCreationNoDeletion => {}
+                                        RecreatingMode::Owned => result.to_anyhow(Some(
+                                            &format!("for non-deleting action {action:?}"),
+                                        ))?,
+                                        RecreatingMode::TryCreationNoDeletion => (),
                                     }
                                 }
                             }
-                            Some(code) => {
-                                bail!(
-                                    "command `{}` exited with code {code}: {}",
-                                    shell_quote_many(&cmd),
-                                    result.combined_output
-                                )
-                            }
-                            None => bail!(
-                                "command `{}` was killed by signal {:?}",
-                                shell_quote_many(&cmd),
-                                result.signal()
-                            ),
+                            _ => result.to_anyhow(None)?,
                         }
                     }
                 }
