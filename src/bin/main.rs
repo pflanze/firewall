@@ -28,22 +28,8 @@ struct Args {
     action: String,
 }
 
-fn main() -> Result<()> {
-    let args: Args = Args::parse();
-
-    let want = match &*args.action {
-        "start" | "restart" => Effect::Recreation,
-        "stop" => Effect::Deletion,
-        _ => bail!("invalid action {:?}", args.action),
-    };
-
+fn example(interfaces: Vec<String>) -> Result<IptablesWriter> {
     let mut iptables = IptablesWriter::new(vec!["ip6tables".into()]);
-    let interfaces = if args.interfaces.is_empty() {
-        find_network_interfaces()?
-    } else {
-        args.interfaces
-    };
-
     let our_chain = Filter::Custom("our-chain".into());
 
     iptables.push(
@@ -95,6 +81,24 @@ fn main() -> Result<()> {
         )?;
     }
 
+    Ok(iptables)
+}
+
+fn main() -> Result<()> {
+    let args: Args = Args::parse();
+
+    let want = match &*args.action {
+        "start" | "restart" => Effect::Recreation,
+        "stop" => Effect::Deletion,
+        _ => bail!("invalid action {:?}", args.action),
+    };
+
+    let interfaces = if args.interfaces.is_empty() {
+        find_network_interfaces()?
+    } else {
+        args.interfaces
+    };
+
     let mut executor: Box<dyn Executor<Action>> = if args.dry_run {
         Box::new(DryExecutor)
     } else {
@@ -102,5 +106,5 @@ fn main() -> Result<()> {
     };
     let verbose = args.dry_run || args.verbose;
     let verbose_output = if verbose { Some(stderr()) } else { None };
-    iptables.execute(want, verbose_output, &mut *executor)
+    example(interfaces)?.execute(want, verbose_output, &mut *executor)
 }
