@@ -1,15 +1,11 @@
 use anyhow::{anyhow, bail, Result};
 use ipnet::Ipv4Net;
-use std::fmt::{Debug, Write};
+use std::fmt::Debug;
 use std::os::unix::process::ExitStatusExt;
 use std::process::Command;
 
 use crate::command_util::CombinedString;
 use string_enum_macro::{lc_string_enum, uc_string_enum};
-
-pub fn write_str(out: &mut String, s: &str) {
-    out.write_str(s).unwrap(); // can't ever fail, no?
-}
 
 #[lc_string_enum]
 #[derive(Copy)]
@@ -411,10 +407,10 @@ impl IptablesWriter {
         let mut out = String::new();
         for (action, rule, _) in &self.actions {
             for arg in rule.cmd_args(*action) {
-                write_str(&mut out, " ");
-                write_str(&mut out, &arg);
+                out.push_str(" ");
+                out.push_str(&arg);
             }
-            write_str(&mut out, "\n");
+            out.push_str("\n");
         }
         out
     }
