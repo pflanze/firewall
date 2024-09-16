@@ -74,13 +74,13 @@ impl<'t> ExecutorResult<'t> {
     }
 }
 
-pub trait Executor {
-    fn execute<'t>(&mut self, cmd: &'t [String]) -> ExecutorResult<'t>;
+pub trait Executor<C> {
+    fn execute<'t>(&mut self, context: C, cmd: &'t [String]) -> ExecutorResult<'t>;
 }
 
 pub struct DryExecutor;
-impl Executor for DryExecutor {
-    fn execute<'t>(&mut self, cmd: &'t [String]) -> ExecutorResult<'t> {
+impl<C> Executor<C> for DryExecutor {
+    fn execute<'t>(&mut self, _context: C, cmd: &'t [String]) -> ExecutorResult<'t> {
         ExecutorResult {
             cmd,
             status: ExecutorStatus::Success,
@@ -90,8 +90,8 @@ impl Executor for DryExecutor {
 }
 
 pub struct RealExecutor;
-impl Executor for RealExecutor {
-    fn execute<'t>(&mut self, cmd: &'t [String]) -> ExecutorResult<'t> {
+impl<C> Executor<C> for RealExecutor {
+    fn execute<'t>(&mut self, _context: C, cmd: &'t [String]) -> ExecutorResult<'t> {
         let mut command = Command::new(&cmd[0]);
         command.args(&cmd[1..]);
         match command.output() {

@@ -93,7 +93,7 @@ fn main() -> Result<()> {
         )?;
     }
 
-    let mut executor: Box<dyn Executor> = if args.dry_run {
+    let mut executor: Box<dyn Executor<Action>> = if args.dry_run {
         Box::new(DryExecutor)
     } else {
         Box::new(RealExecutor)

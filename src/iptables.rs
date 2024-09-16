@@ -425,7 +425,12 @@ impl IptablesWriter {
     /// Turn the pushed rules into rules for actual execution
     /// according to the wanted Effect. Execute for real if true is
     /// given.
-    pub fn execute(&self, want: Effect, verbose: bool, executor: &mut dyn Executor) -> Result<()> {
+    pub fn execute(
+        &self,
+        want: Effect,
+        verbose: bool,
+        executor: &mut dyn Executor<Action>,
+    ) -> Result<()> {
         let mut run = |creation: bool| -> Result<()> {
             let actions: Box<dyn Iterator<Item = _>> = if creation {
                 Box::new(self.actions.iter())
@@ -455,7 +460,7 @@ impl IptablesWriter {
                     let mut cmd = self.iptables_cmd.clone();
                     let mut args = rule.cmd_args(*action);
                     cmd.append(&mut args);
-                    let result = executor.execute(&cmd);
+                    let result = executor.execute(*action, &cmd);
                     if verbose {
                         eprintln!("+ {}", shell_quote_many(&cmd));
                     }
