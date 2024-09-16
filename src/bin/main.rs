@@ -191,7 +191,9 @@ fn verify_error_mode() {
         "command `ip6tables -t filter -X our-chain` exited with code 4: "
     );
 
-    // Simulate chain deletion failure because of it being busy
+    // Simulate chain deletion failure because of it being busy; but
+    // do not simulate the subsequent error on the -N action--for that
+    // see the next test.
     assert_eq!(
         run(MockExecutor(vec![(
             "-X",
@@ -209,6 +211,41 @@ fn verify_error_mode() {
             + ip6tables -t filter -F our-chain
             E ip6tables -t filter -X our-chain
             + ip6tables -t filter -N our-chain
+            + ip6tables -t filter -I INPUT 1 -j our-chain
+            + ip6tables -t filter -I FORWARD 1 -j our-chain
+            + ip6tables -t filter -A our-chain -i eth42 -p tcp --dport 22 -j RETURN
+            + ip6tables -t filter -A our-chain -i eth42 -p tcp --dport 80 -j RETURN
+            + ip6tables -t filter -A our-chain -i eth42 -p tcp --dport 9080 -j RETURN
+            + ip6tables -t filter -A our-chain -i eth42 -j REJECT
+        "}
+    );
+
+    // Simulate chain deletion failure because of it being busy,
+    // including subsequent error on -N action.
+    assert_eq!(
+        run(MockExecutor(vec![
+            (
+                "-X",
+                ExecutorStatus::ExitCode(4),
+                ".. CHAIN_DEL failed (Device or resource busy) ..".into()
+            ),
+            (
+                "-N",
+                ExecutorStatus::ExitCode(1),
+                "iptables: Chain already exists.".into()
+            )
+        ]))
+        .unwrap(),
+        indoc! {"
+            + ip6tables -t filter -D our-chain -i eth42 -j REJECT
+            + ip6tables -t filter -D our-chain -i eth42 -p tcp --dport 9080 -j RETURN
+            + ip6tables -t filter -D our-chain -i eth42 -p tcp --dport 80 -j RETURN
+            + ip6tables -t filter -D our-chain -i eth42 -p tcp --dport 22 -j RETURN
+            + ip6tables -t filter -D FORWARD -j our-chain
+            + ip6tables -t filter -D INPUT -j our-chain
+            + ip6tables -t filter -F our-chain
+            E ip6tables -t filter -X our-chain
+            E ip6tables -t filter -N our-chain
             + ip6tables -t filter -I INPUT 1 -j our-chain
             + ip6tables -t filter -I FORWARD 1 -j our-chain
             + ip6tables -t filter -A our-chain -i eth42 -p tcp --dport 22 -j RETURN
