@@ -126,6 +126,7 @@ dependencies = [
  "anyhow",
  "clap",
  "enumn",
+ "indoc",
  "ipnet",
  "nispor",
  "string_enum",
@@ -278,6 +279,12 @@ dependencies = [
  "autocfg",
  "hashbrown",
 ]
+
+[[package]]
+name = "indoc"
+version = "1.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfa799dd5ed20a7e349f3b4639aa80d74549c81716d9ec4f994c9b5815598306"
 
 [[package]]
 name = "ipnet"

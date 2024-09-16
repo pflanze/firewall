@@ -24,5 +24,7 @@ strum = { version = "0.20", features = ["derive"] }
 strum_macros = { version = "0.20" }
 nispor = "=1.2.8"
 ipnet = "2.9"
+indoc = "1.0"
+
 string_enum = { path = "string_enum" }
 string_enum_macro = { path = "string_enum/string_enum_macro" }
