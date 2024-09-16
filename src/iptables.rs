@@ -343,6 +343,8 @@ pub enum ResultInterpretation {
     OkForDeletions,
     /// A chain couldn't be deleted because it is in use
     ChainInUse,
+    /// A chain couldn't be created because it already exists
+    ChainAlreadyExists,
     /// Unrecoverable error
     Err,
 }
@@ -352,18 +354,21 @@ impl<'t> From<&ExecutorResult<'t>> for ResultInterpretation {
         match result.status {
             ExecutorStatus::Success => Self::Ok,
             ExecutorStatus::ExitCode(code) => {
-                // It appears that iptables exits with code 1 *or* 2 when
-                // chain doesn't exist, 1 for rule that doesn't exist, 4 when
-                // not running as root or when "Device or resource busy"
-                // because a chain, while empty, is still referenced.
-                if code == 1 || code == 2 {
-                    Self::OkForDeletions
-                } else if code == 4
+                if code == 4
                     && result
                         .combined_output
                         .contains(" CHAIN_DEL failed (Device or resource busy) ")
                 {
                     Self::ChainInUse
+                } else if code == 1 && result.combined_output.contains("Chain already exists") {
+                    Self::ChainAlreadyExists
+                }
+                // It appears that iptables exits with code 1 *or* 2 when
+                // chain doesn't exist, 1 for rule that doesn't exist, 4 when
+                // not running as root or when "Device or resource busy"
+                // because a chain, while empty, is still referenced.
+                else if code == 1 || code == 2 {
+                    Self::OkForDeletions
                 } else {
                     Self::Err
                 }
@@ -508,7 +513,20 @@ impl IptablesWriter {
                                     "because chain is in use, for non-deleting action {action:?}"
                                 )))?
                             } else {
-                                // XX todo: Mark so that error in creation part will be OK.
+                                // Mark so that error in creation part
+                                // below can be more strictly checked?
+                            }
+                        }
+                        ResultInterpretation::ChainAlreadyExists => {
+                            if *action == Action::NewChain {
+                                // Only ignore this error if
+                                // previously there was the ChainInUse
+                                // error above on the same rule?
+                            } else {
+                                result.to_anyhow(Some(&format!(
+                                    "got 'chain already exists' error even though action \
+                                     is not chain creation, but {action:?}"
+                                )))?
                             }
                         }
                         ResultInterpretation::Err => result.to_anyhow(None)?,
