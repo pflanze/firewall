@@ -190,4 +190,31 @@ fn verify_error_mode() {
         .to_string(),
         "command `ip6tables -t filter -X our-chain` exited with code 4: "
     );
+
+    // Simulate chain deletion failure because of it being busy
+    assert_eq!(
+        run(MockExecutor(vec![(
+            "-X",
+            ExecutorStatus::ExitCode(4),
+            ".. CHAIN_DEL failed (Device or resource busy) ..".into()
+        ),]))
+        .unwrap(),
+        indoc! {"
+            + ip6tables -t filter -D our-chain -i eth42 -j REJECT
+            + ip6tables -t filter -D our-chain -i eth42 -p tcp --dport 9080 -j RETURN
+            + ip6tables -t filter -D our-chain -i eth42 -p tcp --dport 80 -j RETURN
+            + ip6tables -t filter -D our-chain -i eth42 -p tcp --dport 22 -j RETURN
+            + ip6tables -t filter -D FORWARD -j our-chain
+            + ip6tables -t filter -D INPUT -j our-chain
+            + ip6tables -t filter -F our-chain
+            E ip6tables -t filter -X our-chain
+            + ip6tables -t filter -N our-chain
+            + ip6tables -t filter -I INPUT 1 -j our-chain
+            + ip6tables -t filter -I FORWARD 1 -j our-chain
+            + ip6tables -t filter -A our-chain -i eth42 -p tcp --dport 22 -j RETURN
+            + ip6tables -t filter -A our-chain -i eth42 -p tcp --dport 80 -j RETURN
+            + ip6tables -t filter -A our-chain -i eth42 -p tcp --dport 9080 -j RETURN
+            + ip6tables -t filter -A our-chain -i eth42 -j REJECT
+        "}
+    );
 }
