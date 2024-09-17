@@ -405,7 +405,7 @@ impl<'t> From<&ExecutorResult<'t>> for ResultInterpretation {
                 if code == 4
                     && result
                         .combined_output
-                        .contains(" CHAIN_DEL failed (Device or resource busy) ")
+                        .contains("CHAIN_DEL failed (Device or resource busy)")
                 {
                     Self::ChainInUse
                 } else if code == 1 && result.combined_output.contains("Chain already exists") {
