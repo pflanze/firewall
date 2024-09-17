@@ -247,3 +247,37 @@ fn verify_error_mode() {
         "}
     );
 }
+
+#[test]
+fn test_restriction_common() {
+    use indoc::indoc;
+
+    let mut iptables = IptablesWriter::new(vec!["ip6tables".into()]);
+    iptables.push(
+        Action::Append,
+        Rule {
+            chain: Filter::INPUT,
+            restrictions: restrictions![Custom(vec![
+                "-m".to_string(),
+                "conntrack".to_string(),
+                "--ctstate".to_string(),
+                "RELATED,ESTABLISHED".to_string(),
+            ])],
+            // XX todo: is it valid to not have an action?
+            rule_action: RuleAction::None,
+        },
+        RecreatingMode::Owned,
+    );
+    let mut output = Vec::new();
+    iptables
+        .execute(Effect::Recreation, Some(&mut output), &mut DryExecutor)
+        .unwrap();
+    let output = String::from_utf8(output).unwrap();
+    assert_eq!(
+        output,
+        indoc! {"
+            + ip6tables -t filter -D INPUT -m conntrack --ctstate RELATED,ESTABLISHED
+            + ip6tables -t filter -A INPUT -m conntrack --ctstate RELATED,ESTABLISHED
+        "}
+    );
+}
