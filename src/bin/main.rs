@@ -249,7 +249,7 @@ fn verify_error_mode() {
 }
 
 #[test]
-fn test_restriction_common() {
+fn test_restriction_custom() {
     use indoc::indoc;
 
     let mut iptables = IptablesWriter::new(vec!["ip6tables".into()]);
