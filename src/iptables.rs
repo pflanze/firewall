@@ -262,6 +262,7 @@ pub enum Restriction {
     DestinationAddress(Negatable, Ipv4Net),
     SourcePort(Negatable, u16),
     DestinationPort(Negatable, u16),
+    Custom(Vec<String>),
 }
 
 impl Restriction {
@@ -296,6 +297,11 @@ impl Restriction {
                 out.push("--dport".into());
                 neg.push_args(out);
                 out.push(n.to_string());
+            }
+            Restriction::Custom(conditions) => {
+                for condition in conditions {
+                    out.push(condition.into());
+                }
             }
         }
     }
