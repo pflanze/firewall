@@ -262,6 +262,10 @@ pub enum Restriction {
     DestinationAddress(Negatable, Ipv4Net),
     SourcePort(Negatable, u16),
     DestinationPort(Negatable, u16),
+    /// Use as a loophole to cover iptables functionality that isn't
+    /// implemented yet; this will go away again once all
+    /// functionality is covered, although a crate feature to
+    /// re-enable it might remain.
     Custom(Vec<String>),
 }
 
