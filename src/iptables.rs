@@ -469,6 +469,16 @@ pub enum RecreatingMode {
     TryCreationNoDeletion,
 }
 
+impl RecreatingMode {
+    pub fn allows_errors_on_creation(&self) -> bool {
+        match self {
+            RecreatingMode::Owned => false,
+            RecreatingMode::TryCreation => true,
+            RecreatingMode::TryCreationNoDeletion => true,
+        }
+    }
+}
+
 impl IptablesWriter {
     pub fn new(iptables_cmd: Vec<String>) -> Self {
         Self {
@@ -573,14 +583,16 @@ impl IptablesWriter {
                     match ResultInterpretation::from(&result) {
                         ResultInterpretation::Ok => (),
                         ResultInterpretation::OkForDeletions => {
-                            if action.is_creation() {
+                            if action.is_creation() && !recreating_mode.allows_errors_on_creation()
+                            {
                                 result.to_anyhow(Some(&format!(
                                     "for non-deleting action {action:?}"
                                 )))?
                             }
                         }
                         ResultInterpretation::ChainInUse => {
-                            if action.is_creation() {
+                            if action.is_creation() && !recreating_mode.allows_errors_on_creation()
+                            {
                                 result.to_anyhow(Some(&format!(
                                     "because chain is in use, for non-deleting action {action:?}"
                                 )))?
@@ -594,7 +606,9 @@ impl IptablesWriter {
                                 // Only ignore this error if
                                 // previously there was the ChainInUse
                                 // error above on the same rule?
-                            } else {
+                            } else if action.is_creation()
+                                && !recreating_mode.allows_errors_on_creation()
+                            {
                                 result.to_anyhow(Some(&format!(
                                     "got 'chain already exists' error even though action \
                                      is not chain creation, but {action:?}"
