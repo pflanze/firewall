@@ -454,7 +454,18 @@ pub enum Effect {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RecreatingMode {
+    /// Always create and always delete
     Owned,
+    /// Try to create but don't given an error if that fails. Always
+    /// delete. Useful when trying to add rules onto a chain by
+    /// another entity that might not exist in all cases.
+    TryCreation,
+    /// Try to create but don't give an error if that fails, never
+    /// delete. Perhaps useful for creating chains that should stay
+    /// around when stopping the firewall, hence subsequent creation
+    /// mustn't fail. This can't be used for creating match rules (but
+    /// only chains) as each time the firewall is restarted it would
+    /// add/insert another copy of it.
     TryCreationNoDeletion,
 }
 
@@ -527,6 +538,7 @@ impl IptablesWriter {
             for (action, rule, recreating_mode) in actions {
                 match recreating_mode {
                     RecreatingMode::Owned => {}
+                    RecreatingMode::TryCreation => {}
                     RecreatingMode::TryCreationNoDeletion => {
                         if !creation {
                             continue;
