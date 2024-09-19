@@ -281,3 +281,125 @@ fn test_restriction_custom() {
         "}
     );
 }
+
+// Verify errors when creating chains in the various
+// `RecreatingMode`s.
+#[test]
+fn verify_try_creation_mode_with_chains() {
+    use indoc::indoc;
+
+    let test_with_mode = |recreating_mode| -> Result<String> {
+        let mut iptables = IptablesWriter::new(vec!["ip6tables".into()]);
+        let our_chain = Filter::Custom("OUR-CHAIN".into());
+        iptables.push(
+            Action::NewChain,
+            Rule {
+                chain: our_chain.clone(),
+                restrictions: vec![],
+                rule_action: RuleAction::None,
+            },
+            recreating_mode,
+        );
+        let mut output = Vec::new();
+        let mut executor = MockExecutor(vec![
+            (
+                "-N",
+                ExecutorStatus::ExitCode(1),
+                "Chain already exists".into(),
+            ),
+            (
+                "-X",
+                ExecutorStatus::ExitCode(1),
+                "No chain/target/match by that name".into(),
+            ),
+        ]);
+        iptables.execute(Effect::Recreation, Some(&mut output), &mut executor)?;
+        Ok(String::from_utf8(output).unwrap())
+    };
+
+    // We ideally *do* expect an error here. Sadly the handling of
+    // ResultInterpretation::ChainAlreadyExists in iptables.rs drops
+    // the error in all cases, hence: (todo: change, but that's a
+    // breaking change)
+    assert_eq!(
+        test_with_mode(RecreatingMode::Owned)
+            // .unwrap_err()
+            // .to_string(),
+            .unwrap(),
+        indoc! {"
+            + ip6tables -t filter -F OUR-CHAIN
+            E ip6tables -t filter -X OUR-CHAIN
+            E ip6tables -t filter -N OUR-CHAIN
+        "}
+    );
+
+    assert_eq!(
+        test_with_mode(RecreatingMode::TryCreation).unwrap(),
+        indoc! {"
+            + ip6tables -t filter -F OUR-CHAIN
+            E ip6tables -t filter -X OUR-CHAIN
+            E ip6tables -t filter -N OUR-CHAIN
+        "}
+    );
+    assert_eq!(
+        test_with_mode(RecreatingMode::TryCreationNoDeletion).unwrap(),
+        "E ip6tables -t filter -N OUR-CHAIN\n"
+    );
+}
+
+// Verify that adding a rule to a chain that doesn't exist doesn't
+// give an error when using RecreatingMode::TryCreation, but is
+// still being cleaned away if possible.
+#[test]
+fn verify_try_creation_mode_with_rules() {
+    use indoc::indoc;
+
+    let test_with_mode = |recreating_mode| -> Result<String> {
+        let mut iptables = IptablesWriter::new(vec!["ip6tables".into()]);
+        let the_chain = Filter::Custom("SOMEONE-ELSES-CHAIN".into());
+        iptables.push(
+            Action::Append,
+            Rule {
+                chain: the_chain.clone(),
+                restrictions: vec![],
+                rule_action: RuleAction::None,
+            },
+            recreating_mode,
+        );
+        let mut output = Vec::new();
+        let mut executor = MockExecutor(vec![
+            (
+                "-A",
+                ExecutorStatus::ExitCode(1),
+                "iptables: No chain/target/match by that name.".into(),
+            ),
+            (
+                "-D",
+                ExecutorStatus::ExitCode(1),
+                "iptables: Bad rule (does a matching rule exist in that chain?).".into(),
+            ),
+        ]);
+        iptables.execute(Effect::Recreation, Some(&mut output), &mut executor)?;
+        Ok(String::from_utf8(output).unwrap())
+    };
+
+    assert_eq!(
+        test_with_mode(RecreatingMode::Owned)
+            .unwrap_err()
+            .to_string(),
+        "command `ip6tables -t filter -A SOMEONE-ELSES-CHAIN` exited with code 1 \
+         for non-deleting action Creation(Append): iptables: No chain/target/match by that name."
+    );
+
+    assert_eq!(
+        test_with_mode(RecreatingMode::TryCreation).unwrap(),
+        indoc! {"
+            E ip6tables -t filter -D SOMEONE-ELSES-CHAIN
+            E ip6tables -t filter -A SOMEONE-ELSES-CHAIN
+        "}
+    );
+    assert_eq!(
+        test_with_mode(RecreatingMode::TryCreationNoDeletion).unwrap(),
+        "E ip6tables -t filter -A SOMEONE-ELSES-CHAIN\n"
+    );
+}
