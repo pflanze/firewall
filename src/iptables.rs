@@ -329,6 +329,7 @@ macro_rules! restrictions {
 pub enum RuleAction<C: TablechainTrait> {
     None,
     Return,
+    Accept,
     Drop,
     Reject,
     Jump(C),
@@ -342,6 +343,10 @@ impl<C: TablechainTrait> RuleAction<C> {
             RuleAction::Return => {
                 out.push("-j".into());
                 out.push("RETURN".into());
+            }
+            RuleAction::Accept => {
+                out.push("-j".into());
+                out.push("ACCEPT".into());
             }
             RuleAction::Drop => {
                 out.push("-j".into());
