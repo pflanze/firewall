@@ -1,6 +1,7 @@
 use anyhow::Result;
-use ipnet::Ipv4Net;
+pub use ipnet::{IpNet, Ipv4Net};
 use std::fmt::Debug;
+use std::net::IpAddr;
 
 use crate::executor::{Executor, ExecutorResult, ExecutorStatus};
 use crate::shell_quote::shell_quote_many;
@@ -119,8 +120,16 @@ impl AnyAction {
 }
 
 pub trait TablechainTrait {
+    /// *Only* the chain name, without preceding "-j", and without
+    /// possible followup arguments like for "DNAT".
     fn chain_name(&self) -> String;
+
     fn table_and_chain_names(&self) -> (String, String);
+
+    /// Possible followup arguments, e.g. for "DNAT".
+    fn chain_arguments(&self) -> Vec<String> {
+        Vec::new()
+    }
 
     /// For collecting the arguments for the iptables command.
     fn push_args(&self, action: AnyAction, out: &mut Vec<String>) {
@@ -133,7 +142,9 @@ pub trait TablechainTrait {
 
 // TODO: find out how to implement the same without using a macro.
 macro_rules! def_chain {
-    { $typename:tt } => {
+    // Take an optional $body to allow e.g. overriding fn
+    // chain_arguments
+    { $typename:tt => { $($body:tt)* } } => {
         impl TablechainTrait for $typename {
             fn chain_name(&self) -> String {
                 let name: &'static str = self.into();
@@ -148,12 +159,16 @@ macro_rules! def_chain {
                     self.chain_name()
                 )
             }
+            $($body)*
         }
         impl From<$typename> for TablechainEnum {
             fn from(value: $typename) -> Self {
                 TablechainEnum::$typename(value)
             }
         }
+    };
+    { $typename:tt } => {
+        def_chain!{ $typename => {} }
     }
 }
 
@@ -166,15 +181,46 @@ pub enum Filter {
 }
 def_chain!(Filter);
 
+// XX DNAT is "only valid in the PREROUTING and OUTPUT chains and
+// user-defined chains which are only called from those chains",
+// can this be encoded in the type system?
+
 #[uc_string_enum]
 pub enum Nat {
     PREROUTING,
     INPUT,
     OUTPUT,
     POSTROUTING,
+    DNAT {
+        // XX is there a combined IpAddr and port?
+        to_destination: (IpAddr, u16),
+        random: bool,
+        persistent: bool,
+    },
     Custom(String),
 }
-def_chain!(Nat);
+def_chain! {
+    Nat => {
+        fn chain_arguments(&self) -> Vec<String> {
+            match self {
+                Nat::DNAT { to_destination, random, persistent } => {
+                    let (ipaddr, port) = to_destination;
+                    // XX todo: ipaddr should actually be optional, or
+                    // it could be a range.
+                    let mut args = vec!["--to-destination".into(), format!("{ipaddr}:{port}") ];
+                    if *random {
+                        args.push("--random".into());
+                    }
+                    if *persistent {
+                        args.push("--persistent".into());
+                    }
+                    args
+                },
+                _ => Vec::new()
+            }
+        }
+    }
+}
 
 #[uc_string_enum]
 pub enum Mangle {
@@ -359,10 +405,13 @@ impl<C: TablechainTrait> RuleAction<C> {
             RuleAction::Jump(c) => {
                 out.push("-j".into());
                 out.push(c.chain_name());
+                out.append(&mut c.chain_arguments());
             }
             RuleAction::Goto(c) => {
                 out.push("-g".into());
                 out.push(c.chain_name());
+                // XX what is Goto for, does it allow DNAT, too?
+                out.append(&mut c.chain_arguments());
             }
         }
     }
