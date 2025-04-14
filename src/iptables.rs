@@ -7,6 +7,34 @@ use crate::executor::{Executor, ExecutorResult, ExecutorStatus};
 use crate::shell_quote::shell_quote_many;
 use string_enum_macro::{lc_string_enum, uc_string_enum};
 
+#[derive(Debug, Clone, Copy)]
+pub enum IpVersion {
+    V4,
+    V6,
+}
+
+pub const IP_VERSIONS: [IpVersion; 2] = [IpVersion::V4, IpVersion::V6];
+
+impl IpVersion {
+    pub fn iptables_command(self) -> &'static str {
+        match self {
+            IpVersion::V4 => "iptables",
+            IpVersion::V6 => "ip6tables",
+        }
+    }
+
+    pub fn new_iptables_writer(self) -> IptablesWriter {
+        IptablesWriter::new(vec![self.iptables_command().into()])
+    }
+
+    pub fn icmp_protocol(self) -> Protocol {
+        match self {
+            IpVersion::V4 => Protocol::Icmp,
+            IpVersion::V6 => Protocol::Icmpv6,
+        }
+    }
+}
+
 #[lc_string_enum]
 #[derive(Copy)]
 pub enum Table {
