@@ -1,7 +1,8 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 pub use ipnet::{IpNet, Ipv4Net};
 use std::fmt::Debug;
 use std::net::IpAddr;
+use std::str::FromStr;
 
 use crate::executor::{Executor, ExecutorResult, ExecutorStatus};
 use crate::shell_quote::shell_quote_many;
@@ -526,12 +527,50 @@ pub struct IptablesWriter {
 
 /// What end result you want: Deletion inverts the result of an
 /// action. Recreation first deletes then creates. Creation just runs
-/// the originally specified action (rarely what you want).
+/// the originally specified action (rarely what you want).  XX NOTE:
+/// Recreation and Deletion are not working well if the filewalling
+/// rules change. TODO: implement recording of the Creation rules so
+/// that Recreation/Deletion can delete those exact rules.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Effect {
     Creation,
     Recreation,
     Deletion,
+}
+
+/// Interface for daemon style start|stop|restart commands. Implements
+/// `FromStr` for easy parsing e.g. via `clap`. Note: maps `Start` to
+/// `Effect::Recreation` (hack).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Command {
+    Start,
+    Restart,
+    Stop,
+}
+
+impl From<Command> for Effect {
+    fn from(c: Command) -> Self {
+        match c {
+            // Start does delete previous rules, but again, this is
+            // a hack and "not working well".
+            Command::Start => Effect::Recreation,
+            Command::Restart => Effect::Recreation,
+            Command::Stop => Effect::Deletion,
+        }
+    }
+}
+
+impl FromStr for Command {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "start" => Ok(Command::Start),
+            "stop" => Ok(Command::Stop),
+            "restart" => Ok(Command::Restart),
+            _ => bail!("please give start|stop|restart"),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
