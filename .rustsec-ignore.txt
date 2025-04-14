@@ -1,11 +1,13 @@
 # atty 0.2.11 affected by RUSTSEC-2021-0145 (unsound)
 RUSTSEC-2021-0145
-
-# time 0.1.45 affected by RUSTSEC-2020-0071 (Potential segfault in the time crate)
-RUSTSEC-2020-0071
-
-# regex 1.4.6 affected by RUSTSEC-2022-0013 (Regexes with large repetitions on empty sub-expressions take a very long time to parse)
-RUSTSEC-2022-0013
-
-# ansi_term 0.12.1 affected by RUSTSEC-2021-0139 (unmaintained)
-RUSTSEC-2021-0139
+# atty 0.2.11 affected by RUSTSEC-2024-0375 (unmaintained)
+RUSTSEC-2024-0375
+# mio 0.8.4 affected by RUSTSEC-2024-0019 (Tokens for named pipes may be delivered after deregistration)
+RUSTSEC-2024-0019
+# paste 1.0.12 affected by RUSTSEC-2024-0436 (unmaintained)
+RUSTSEC-2024-0436
+# tokio 1.28.2 affected by RUSTSEC-2025-0023 (unsound)
+# we're just using it locally? still TODO
+RUSTSEC-2025-0023
+# proc-macro-error 1.0.4 affected by RUSTSEC-2024-0370 (unmaintained)
+RUSTSEC-2024-0370
